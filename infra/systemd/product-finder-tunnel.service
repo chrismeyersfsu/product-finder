@@ -1,0 +1,13 @@
+[Unit]
+Description=Cloudflare tunnel (product-finder) for product-finder.judicialschedule.com
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/cloudflared tunnel --config %h/.cloudflared/product-finder.yml run product-finder
+# cloudflared exits after self-updating (exit code 11) — always restarting
+# turns that into a seamless upgrade instead of an outage
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

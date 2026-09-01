@@ -1,0 +1,24 @@
+[Unit]
+Description=Product Finder MCP server
+After=network.target
+
+[Container]
+Image=localhost/product-finder:latest
+ContainerName=product-finder-mcp
+Network=host
+# Mutable state (the SQLite db) bind-mounted at the SAME absolute path
+# inside and out — WAL sidecar files and the UI's read-only handle both
+# resolve identically across the container/host boundary.
+Volume=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data:/home/cmeyers/github.com/chrismeyersfsu/product-finder/data:Z
+# The repo itself rides along so the project_* MCP tools modify the real
+# working tree, not the image's baked-in copy.
+Volume=/home/cmeyers/github.com/chrismeyersfsu/product-finder:/home/cmeyers/github.com/chrismeyersfsu/product-finder:Z
+Environment=PF_DB=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data/product_finder.db
+Environment=PF_PROJECT_ROOT=/home/cmeyers/github.com/chrismeyersfsu/product-finder
+Exec=product-finder-mcp --transport streamable-http --host 127.0.0.1 --port 8848
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

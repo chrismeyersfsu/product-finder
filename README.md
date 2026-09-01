@@ -177,6 +177,35 @@ container (`docker compose up ui`, port 4321, shares the `/data`
 volume with the MCP service). Charts follow a validated colorblind-safe
 palette; every chart has a table view, tooltips, and a dark mode.
 
+## Deployment
+
+`./infra/systemd/install.sh` is the one deploy command — idempotent,
+rerun it after changing units or app code. It follows the
+caseworkflow deployment pattern (`caseworkflow/docs/patterns/
+deployment.md`): rootless podman quadlets for the MCP server and the
+dashboard UI, a plain systemd user unit for the Cloudflare tunnel, and
+the gate + image builds + service restarts all inside the installer so
+nothing broken reaches the running services.
+
+What it sets up:
+
+- `product-finder-mcp.container` — MCP server (browser image,
+  streamable-http on 127.0.0.1:8848). The db lives in `data/`,
+  bind-mounted at the same absolute path inside and out; the repo is
+  bind-mounted too so the `project_*` MCP tools edit the real working
+  tree.
+- `product-finder-ui.container` — dashboard (127.0.0.1:4321), same db
+  bind mount, read-only access.
+- `product-finder-tunnel.service` — cloudflared serving
+  https://product-finder.judicialschedule.com (config in
+  `~/.cloudflared/product-finder.yml`; the installer writes it and the
+  DNS route if missing).
+
+The installer migrates a pre-existing repo-root `product_finder.db`
+into `data/` once, refuses to run while an ad-hoc dev server holds
+:4321 (and prints the command to stop it), and skips image builds and
+restarts when nothing changed.
+
 ## Caveats — read before trusting results
 
 - Scraping selectors rot. The built-in specs are best-effort snapshots;

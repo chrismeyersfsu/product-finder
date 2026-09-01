@@ -3,3 +3,9 @@
 *.db
 *.db-wal
 *.db-shm
+ui/node_modules
+ui/dist
+data/
+.pytest_cache
+.ruff_cache
+__pycache__

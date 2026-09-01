@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Deployment: `infra/systemd/` with podman quadlets (mcp, ui), a
+  Cloudflare tunnel unit, and an idempotent `install.sh` deploy
+  command, per the caseworkflow deployment pattern. The db moves to
+  `data/` (same-path bind mount); the installer migrates an existing
+  repo-root db.
+
 ## 0.5.1
 
 - Fixed: newly added built-in sites now seed into existing databases
