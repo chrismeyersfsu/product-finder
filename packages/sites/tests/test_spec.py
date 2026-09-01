@@ -34,7 +34,11 @@ def test_api_first_ordering():
     ):
         kinds = [s["kind"] for s in _strategies(SITES[slug])]
         assert kinds[0] == api_kind, slug
-        assert "css" in kinds
+
+
+def test_ebay_never_uses_plain_html():
+    # eBay hard-blocks plain HTTP (403 on /sch/i.html): API then browser only.
+    assert [s["kind"] for s in _strategies(SITES["ebay"])] == ["ebay_api", "browser_css"]
 
 
 def test_js_heavy_sites_have_browser_fallback_last():

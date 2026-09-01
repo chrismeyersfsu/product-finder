@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 — 2026-08-31
+
+- eBay dropped its plain-HTML tier (live 403s regardless of user
+  agent): Browse API first, else browser; the sold-listings backfill
+  spec is browser-fetched too.
+
 ## 0.3.0 — 2026-08-31
 
 - Deal backtesting: new `packages/backtest` engine samples pivot dates

@@ -48,11 +48,13 @@ def test_site_management():
 def test_run_search_scores_and_stores(monkeypatch):
     server.seed_defaults()
     monkeypatch.setattr(
-        fetch, "_get", lambda url, headers=None, timeout=25.0: (FIXTURES / "ebay.html").read_text()
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0: (FIXTURES / "ebay.html").read_text(),
     )
     summary = server.run_search("thin-client-laptop", sites=["ebay"], query="x1 carbon")
     assert summary["stored"] == 2 and summary["per_site"] == {"ebay": 2}
-    assert summary["strategies"] == {"ebay": "css"}  # api tier skipped: creds unset
+    assert summary["strategies"] == {"ebay": "browser_css"}  # api unset, no plain-HTML tier
 
     rows = server.query_listings("thin-client-laptop")
     assert rows and rows[0]["score"] > 0.8

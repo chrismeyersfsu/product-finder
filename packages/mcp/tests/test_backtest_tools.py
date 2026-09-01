@@ -1,4 +1,4 @@
-"""Backtest/history tools against a tmp DB; HTTP faked at fetch._get."""
+"""Backtest/history tools against a tmp DB; I/O faked at the fetch seams."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -30,7 +30,7 @@ def test_backfill_ebay_sold(monkeypatch):
     d1 = (datetime.now(UTC) - timedelta(days=5)).strftime("%b %-d, %Y")
     d2 = (datetime.now(UTC) - timedelta(days=40)).strftime("%b %-d, %Y")
     page = _sold_page([("https://e/itm/1", 254.00, d1), ("https://e/itm/2", 199.00, d2)])
-    monkeypatch.setattr(fetch, "_get", lambda url, headers=None, timeout=25.0: page)
+    monkeypatch.setattr(fetch, "_get_browser", lambda url, wait=None, timeout=30.0: page)
 
     out = server.backfill_ebay_sold("thin-client-laptop", query="x1 carbon")
     assert out["added"] == 2 and out["errors"] == []
@@ -79,7 +79,9 @@ def test_run_search_appends_seen_observations(monkeypatch):
     from pathlib import Path
 
     fixture = Path(__file__).parent / "fixtures" / "ebay.html"
-    monkeypatch.setattr(fetch, "_get", lambda url, headers=None, timeout=25.0: fixture.read_text())
+    monkeypatch.setattr(
+        fetch, "_get_browser", lambda url, wait=None, timeout=30.0: fixture.read_text()
+    )
     server.run_search("thin-client-laptop", sites=["ebay"], query="x1 carbon")
     stats = server.price_history_stats("thin-client-laptop")
     assert stats["per_kind"].get("seen", 0) == 2

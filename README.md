@@ -59,7 +59,10 @@ and why the others didn't (`errors`):
 3. **Browser** (`browser_css`) — Playwright/Chromium renders the page,
    same CSS selectors; the fallback tier for the JS-heavy sites
    (amazon, walmart, target, bestbuy, backmarket, mercari, offerup,
-   shopgoodwill, govdeals). Lives in `packages/browser` so Playwright
+   shopgoodwill, govdeals). eBay hard-blocks plain HTTP (403 on its
+   search page regardless of user agent), so eBay — including the
+   sold-listings backfill — has no plain-HTML tier at all: Browse API
+   if `EBAY_CLIENT_ID`/`EBAY_CLIENT_SECRET` are set, else browser. Lives in `packages/browser` so Playwright
    never bloats plain installs; enable with the mcp `browser` extra
    (`uv sync --package product-finder-mcp --extra browser`) — the
    server wires it automatically when importable.

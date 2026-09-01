@@ -16,18 +16,31 @@ def no_api_creds(monkeypatch):
         monkeypatch.delenv(var, raising=False)
 
 
-def test_api_unset_falls_through_to_css(monkeypatch):
+def test_api_unset_falls_through_to_browser(monkeypatch):
     monkeypatch.setattr(
-        fetch, "_get", lambda url, headers=None, timeout=25.0: (FIXTURES / "ebay.html").read_text()
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0: (FIXTURES / "ebay.html").read_text(),
     )
     result = run.search_site(SITES["ebay"], "thinkpad x1 carbon")
     assert result["error"] is None
-    assert result["strategy"] == "css"
+    assert result["strategy"] == "browser_css"
     assert result["attempts"] == [
         {"strategy": "ebay_api", "error": "EBAY_CLIENT_ID/EBAY_CLIENT_SECRET unset"}
     ]
     assert len(result["listings"]) == 2
     assert all(li["site_slug"] == "ebay" for li in result["listings"])
+
+
+def test_api_unset_falls_through_to_css(monkeypatch):
+    # bestbuy keeps a plain-HTML tier between its API and the browser
+    monkeypatch.setattr(
+        fetch, "_get", lambda url, headers=None, timeout=25.0: "<html>bot wall</html>"
+    )
+    result = run.search_site(SITES["bestbuy"], "x")
+    kinds = [a["strategy"] for a in result["attempts"]]
+    assert kinds == ["bestbuy_api", "css", "browser_css"]
+    assert result["attempts"][0]["error"] == "BESTBUY_API_KEY unset"
 
 
 def test_api_tier_runs_when_creds_set(monkeypatch):
@@ -55,7 +68,7 @@ def test_all_tiers_fail_error_is_a_value(monkeypatch):
     result = run.search_site(SITES["ebay"], "x")
     assert result["strategy"] is None and result["listings"] == []
     assert "ebay_api: EBAY_CLIENT_ID/EBAY_CLIENT_SECRET unset" in result["error"]
-    assert "css: HTTP 403" in result["error"]
+    assert "browser_css: browser fetching not wired" in result["error"]
 
 
 def test_empty_page_falls_through_to_browser(monkeypatch):
@@ -87,9 +100,11 @@ def test_unwired_browser_degrades_to_error(monkeypatch):
 
 def test_search_many_dedupes_and_reports_strategies(monkeypatch):
     monkeypatch.setattr(
-        fetch, "_get", lambda url, headers=None, timeout=25.0: (FIXTURES / "ebay.html").read_text()
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0: (FIXTURES / "ebay.html").read_text(),
     )
     out = run.search_many([SITES["ebay"]], ["query one", "query two"])
     assert len(out["listings"]) == 2  # same fixture twice -> deduped by url
     assert out["errors"] == {}
-    assert out["strategies"] == {"ebay": "css"}
+    assert out["strategies"] == {"ebay": "browser_css"}

@@ -19,7 +19,7 @@ def _strategy(slug, kind):
 def test_parse_ebay_fixture():
     body = (FIXTURES / "ebay.html").read_text()
     url = "https://www.ebay.com/sch/i.html?_nkw=x"
-    listings = parse.parse_listings(_strategy("ebay", "css"), url, body)
+    listings = parse.parse_listings(_strategy("ebay", "browser_css"), url, body)
     assert len(listings) == 2  # placeholder "Shop on eBay" row skipped
     first = listings[0]
     assert first["title"].startswith("Lenovo ThinkPad X1 Carbon Gen 6")
@@ -41,7 +41,10 @@ def test_parse_reddit_fixture():
 
 
 def test_parse_garbage_html_returns_empty():
-    assert parse.parse_listings(_strategy("ebay", "css"), "https://x", "<html>nothing</html>") == []
+    assert (
+        parse.parse_listings(_strategy("ebay", "browser_css"), "https://x", "<html>nothing</html>")
+        == []
+    )
 
 
 def test_price_helper():
@@ -72,7 +75,7 @@ def test_parse_bestbuy_api_fixture():
 
 def test_parse_browser_css_uses_css_selectors():
     body = (FIXTURES / "ebay.html").read_text()
-    css = _strategy("ebay", "css")
+    css = _strategy("ebay", "browser_css")
     listings = parse.parse_listings(
         {"kind": "browser_css", "config": css["config"]}, "https://www.ebay.com/sch", body
     )

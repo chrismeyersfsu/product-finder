@@ -37,11 +37,12 @@ def _css(slug, name, url, item, title, price, link, link_attr="href", seller=Non
 
 # Not part of BUILTIN_SITES: eBay *sold/completed* listings, used to
 # backfill real historical sale prices (eBay exposes roughly the last
-# 90 days). Same css machinery; the "date" selector yields sold_at.
+# 90 days). Same css selectors, but fetched by the browser tier —
+# eBay 403s plain HTTP; the "date" selector yields sold_at.
 EBAY_SOLD = {
     "slug": "ebay-sold",
     "name": "eBay sold listings",
-    "kind": "css",
+    "kind": "browser_css",
     "config": {
         "url": "https://www.ebay.com/sch/i.html?_nkw={query}&LH_Sold=1&LH_Complete=1&_sop=13",
         "item": "li.s-item",
@@ -249,6 +250,10 @@ _FLAT_SITES = [
 ]
 
 
+# Sites that hard-block plain HTTP entirely (eBay 403s /sch/i.html even
+# with a browser UA): no css tier at all — API first, then browser.
+NO_PLAIN_HTML = {"ebay"}
+
 # Sites whose search pages are JS-rendered or bot-block plain HTTP:
 # they get a browser_css fallback tier after plain css.
 JS_HEAVY = {
@@ -272,8 +277,9 @@ def _tiered(site: dict) -> dict:
     strategies = []
     if site["slug"] in _API_FIRST:
         strategies.append({"kind": _API_FIRST[site["slug"]], "config": {}})
-    strategies.append({"kind": "css", "config": site["config"]})
-    if site["slug"] in JS_HEAVY:
+    if site["slug"] not in NO_PLAIN_HTML:
+        strategies.append({"kind": "css", "config": site["config"]})
+    if site["slug"] in JS_HEAVY | NO_PLAIN_HTML:
         strategies.append({"kind": "browser_css", "config": site["config"]})
     if len(strategies) == 1:
         return site  # plain css stays flat
