@@ -47,7 +47,7 @@ LAPTOP = {
                 r"|(?:lcd|screen|display) (?:assembly|replacement)|lcd screen|screen display"
                 r"|display ass?embly|motherboard|mainboard|logic board|\bcase for\b"
                 r"|docking station|\bdock\b|multi[- ]?port|\bhub\b|adapter charger"
-                r"|charger adapter|\bsleeve\b|privacy filter|screen protector"
+                r"|charger adapter|\bsleeve\b|privacy filter|screen protector|^.{0,32}\b(?:charger|adapter|power supply|psu|battery)\b"
                 r"|palmrest|bezel|hinge|heatsink|cooling fan|bottom (?:case|cover)|top cover"
                 r"|(?:keyboard|battery|charger|adapter|fan|speaker|screen) for\b"
                 r"|replacement (?:screen|keyboard|battery)|digitizer|ac adapter|power adapter"
