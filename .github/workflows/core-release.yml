@@ -1,0 +1,19 @@
+name: core-release
+
+# Per-package tags (core-v0.2.0) version packages independently inside
+# one repo; the body is the repo's release script.
+on:
+  push:
+    tags: ["core-v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: ./packages/core/release.sh "$GITHUB_REF_NAME"
+        env:
+          GH_TOKEN: ${{ github.token }}

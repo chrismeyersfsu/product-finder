@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# The fast half of ci.sh: formatting disputes and lint fail before the
+# commit exists. Activate with: git config core.hooksPath .githooks
+set -euo pipefail
+uv run ruff check packages/
+uv run ruff format --check packages/

@@ -1,0 +1,26 @@
+name: core
+
+# Thin trigger: the logic lives in packages/core/ci.sh so CI is runnable
+# and debuggable locally. List a package's own tree, its workspace
+# dependencies, and the lockfile in `paths`.
+on:
+  push:
+    paths:
+      - "packages/core/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/core.yml"
+  pull_request:
+    paths:
+      - "packages/core/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/core.yml"
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: ./packages/core/ci.sh
