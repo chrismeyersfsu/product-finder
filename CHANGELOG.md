@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2
+
+- Laptop seed: parts/accessory/broken listings (motherboards, screens,
+  palmrests, chargers, "for parts") now hard-fail via a required
+  `is_parts` rule; broad "ThinkPad X1 Carbon" query added to the seed.
+
 ## 0.6.1
 
 - Fixed: install.sh now pins the DNS route to the product-finder tunnel
