@@ -58,6 +58,7 @@ def add_product(
     extractors: dict | None = None,
     manual_checks: list[str] | None = None,
     max_price: float | None = None,
+    sites: list[str] | None = None,
 ) -> dict:
     """Create or update a product to search for.
 
@@ -65,7 +66,8 @@ def add_product(
     {pattern, type} regexes pulled from listing titles. criteria:
     weighted rules {field, op, value, weight, required, note} with ops
     gte/lte/eq/contains/one_of/matches/exists. See the seeded
-    thin-client-laptop product for a full example.
+    thin-client-laptop product for a full example. sites: site slugs
+    this product is searched on; empty means every enabled site.
     """
     conn = _connect()
     return storage.upsert_product(
@@ -78,6 +80,7 @@ def add_product(
             "criteria": criteria or [],
             "extractors": extractors or {},
             "manual_checks": manual_checks or [],
+            "sites": sites or [],
             "max_price": max_price,
         },
     )
@@ -129,7 +132,8 @@ def _ensure_sites(conn) -> None:
 def run_search(product_slug: str, sites: list[str] | None = None, query: str | None = None) -> dict:
     """Search enabled sites for a product's queries; score and store results.
 
-    sites: optional list of site slugs to restrict to. query: optional
+    sites: optional list of site slugs to restrict to; defaults to the
+    product's own site list, then every enabled site. query: optional
     one-off query overriding the product's stored queries.
     """
     conn = _connect()
@@ -138,6 +142,7 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
         return {"error": f"no product: {product_slug}"}
     _ensure_sites(conn)
     site_rows = storage.list_sites(conn, enabled_only=True)
+    sites = sites or product.get("sites") or None
     if sites:
         site_rows = [s for s in site_rows if s["slug"] in sites]
     queries = [query] if query else product["queries"]

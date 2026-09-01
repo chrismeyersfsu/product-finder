@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS products (
   criteria TEXT NOT NULL DEFAULT '[]',
   extractors TEXT NOT NULL DEFAULT '{}',
   manual_checks TEXT NOT NULL DEFAULT '[]',
+  sites TEXT NOT NULL DEFAULT '[]',
   max_price REAL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -85,7 +86,7 @@ CREATE TABLE IF NOT EXISTS backtests (
 );
 """
 
-_JSON_PRODUCT_FIELDS = ("queries", "criteria", "extractors", "manual_checks")
+_JSON_PRODUCT_FIELDS = ("queries", "criteria", "extractors", "manual_checks", "sites")
 
 
 def _now() -> str:
@@ -99,7 +100,16 @@ def connect(path: str | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=10000")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(_SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns introduced after a database was first created."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(products)")}
+    if "sites" not in cols:
+        conn.execute("ALTER TABLE products ADD COLUMN sites TEXT NOT NULL DEFAULT '[]'")
+        conn.commit()
 
 
 def _row_to_product(row: sqlite3.Row) -> dict:
@@ -121,13 +131,14 @@ def upsert_product(conn: sqlite3.Connection, product: dict) -> dict:
         p[f] = json.dumps(product.get(f, [] if f != "extractors" else {}))
     conn.execute(
         """INSERT INTO products (slug, name, description, queries, criteria, extractors,
-                                 manual_checks, max_price, created_at, updated_at)
+                                 manual_checks, sites, max_price, created_at, updated_at)
            VALUES (:slug, :name, :description, :queries, :criteria, :extractors,
-                   :manual_checks, :max_price, :now, :now)
+                   :manual_checks, :sites, :max_price, :now, :now)
            ON CONFLICT(slug) DO UPDATE SET
              name=excluded.name, description=excluded.description, queries=excluded.queries,
              criteria=excluded.criteria, extractors=excluded.extractors,
-             manual_checks=excluded.manual_checks, max_price=excluded.max_price,
+             manual_checks=excluded.manual_checks, sites=excluded.sites,
+             max_price=excluded.max_price,
              updated_at=excluded.updated_at""",
         {**p, "now": now},
     )

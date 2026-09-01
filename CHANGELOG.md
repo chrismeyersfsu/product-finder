@@ -1,6 +1,18 @@
 # Changelog
 
-## 0.5.1 — 2026-09-01
+## 0.10.0 — 2026-09-01
+
+- Products carry an optional `sites` list (`add_product(sites=[...])`);
+  `run_search` and the hourly scrape search only those sites, so local
+  goods like cars aren't queried against Newegg. Empty keeps the old
+  every-enabled-site behaviour; existing databases migrate in place.
+- Four products added via `add_product` (no code): Honda Fit, Toyota
+  Prius, Tesla Model Y, Guardian 24" kids bike — Craigslist + Facebook
+  Marketplace only, with model-name, parts/accessory, salvage-title,
+  price-floor, and balance-bike reject rules. Definitions kept in
+  `docs/add_products_example.py`.
+
+## 0.9.0 — 2026-09-01
 
 - Scraper repair from live pages: Office Depot (new /a/search URL +
   od-product-card selectors), Swappa (cell_product), Target (browser

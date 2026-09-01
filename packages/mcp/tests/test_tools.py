@@ -84,6 +84,29 @@ def test_run_search_records_site_errors(monkeypatch):
     assert "browser:" in summary["errors"]["amazon"]
 
 
+def test_run_search_honors_product_site_list(monkeypatch):
+    server.seed_defaults()
+    server.add_product("car", "Car", queries=["honda fit"], sites=["craigslist"])
+    assert server.get_product("car")["sites"] == ["craigslist"]
+    seen: list[str] = []
+
+    def fail(url, headers=None, timeout=25.0):
+        seen.append(url)
+        raise fetch.FetchError("HTTP 403")
+
+    monkeypatch.setattr(fetch, "_get", fail)
+    monkeypatch.setattr(
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0, cookies=None: fetch._browser_unwired(url),
+    )
+    summary = server.run_search("car")
+    assert set(summary["errors"]) == {"craigslist"}
+    assert all("craigslist" in u for u in seen)
+    # An explicit sites= argument still overrides the stored list.
+    assert set(server.run_search("car", sites=["amazon"])["errors"]) == {"amazon"}
+
+
 def test_run_search_missing_product():
     assert "error" in server.run_search("nope")
 
