@@ -62,6 +62,7 @@ LAPTOP = {
             "value": 16,
             "weight": 3,
             "required": True,
+            "reject": True,
             "note": "16GB RAM (soldered; 8GB bottlenecks Chrome+RDP)",
         },
         {"field": "storage_gb", "op": "gte", "value": 256, "weight": 1, "note": "256GB minimum"},

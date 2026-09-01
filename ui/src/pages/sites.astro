@@ -9,11 +9,25 @@ import * as db from "../lib/db";
 const sites = db.listSites();
 const knownSites = sites.map((s) => s.slug);
 const runs = db.recentRuns(10);
-// Latest per-site outcome across recent runs (newest first wins)
+// Latest per-site outcome across recent runs (newest first wins).
+// site_results shape: { per_site: {slug: n}, strategies: {slug: kind}, errors: {slug: msg} }
 const latest = new Map<string, { listings?: number; error?: string | null; strategy?: string; run: string }>();
-for (const run of runs)
-  for (const [slug, r] of Object.entries(run.site_results))
-    if (!latest.has(slug)) latest.set(slug, { ...r, run: run.started_at });
+for (const run of runs) {
+  const sr: any = run.site_results ?? {};
+  const slugs = new Set([
+    ...Object.keys(sr.per_site ?? {}),
+    ...Object.keys(sr.errors ?? {}),
+    ...Object.keys(sr.strategies ?? {}),
+  ]);
+  for (const slug of slugs)
+    if (!latest.has(slug))
+      latest.set(slug, {
+        listings: sr.per_site?.[slug],
+        error: sr.errors?.[slug] ?? null,
+        strategy: sr.strategies?.[slug],
+        run: run.started_at,
+      });
+}
 ---
 <Layout title="Sites" active="sites">
   {sites.length === 0 ? (
@@ -35,7 +49,7 @@ for (const run of runs)
                   <td>
                     {!r ? (
                       <span class="status status-muted"><span class="ic">○</span>never searched</span>
-                    ) : r.error ? (
+                    ) : r.error && !(r.listings && r.listings > 0) ? (
                       <span class="status status-critical"><span class="ic">✗</span>failing</span>
                     ) : (
                       <span class="status status-good"><span class="ic">✓</span>working{r.strategy ? ` (${r.strategy})` : ""}</span>

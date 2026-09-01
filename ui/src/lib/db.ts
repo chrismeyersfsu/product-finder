@@ -59,7 +59,11 @@ export interface SearchRun {
   id: number;
   product_slug: string;
   started_at: string;
-  site_results: Record<string, { listings?: number; error?: string | null; strategy?: string }>;
+  site_results: {
+    per_site?: Record<string, number>;
+    strategies?: Record<string, string>;
+    errors?: Record<string, string>;
+  };
 }
 export interface DealFilters {
   minScore?: number;

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.2
+
+- Laptop seed: under-16GB RAM listings are now rejected at ingest, not
+  stored flagged; /sites now parses run results correctly (it read a
+  demo-data shape and showed every site as never searched) and a site
+  that produced listings reads working even when another query errored.
+
 ## 0.8.1
 
 - Criteria rules gained a `reject` flag: a violated reject rule discards
