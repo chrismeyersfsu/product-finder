@@ -37,7 +37,8 @@ LAPTOP = {
         "is_parts": {
             "pattern": (
                 r"for parts|parts only|as[- ]is|not working|no power|broken|cracked"
-                r"|(?:lcd|screen) (?:assembly|replacement)|motherboard|mainboard|logic board"
+                r"|(?:lcd|screen|display) (?:assembly|replacement)|lcd screen|screen display"
+                r"|display ass?embly|motherboard|mainboard|logic board|\bcase for\b"
                 r"|palmrest|bezel|hinge|heatsink|cooling fan|bottom (?:case|cover)|top cover"
                 r"|(?:keyboard|battery|charger|adapter|fan|speaker|screen) for\b"
                 r"|replacement (?:screen|keyboard|battery)|digitizer|ac adapter|power adapter"
