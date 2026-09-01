@@ -22,7 +22,7 @@ def tmp_db(tmp_path, monkeypatch):
 def test_seed_and_product_crud():
     out = server.seed_defaults()
     assert "thin-client-laptop" in out["products"]
-    assert len(out["sites"]) == 21
+    assert len(out["sites"]) == 22
     assert server.get_product("thin-client-laptop")["criteria"]
 
     server.add_product(
@@ -50,7 +50,7 @@ def test_run_search_scores_and_stores(monkeypatch):
     monkeypatch.setattr(
         fetch,
         "_get_browser",
-        lambda url, wait=None, timeout=30.0: (FIXTURES / "ebay.html").read_text(),
+        lambda url, wait=None, timeout=30.0, cookies=None: (FIXTURES / "ebay.html").read_text(),
     )
     summary = server.run_search("thin-client-laptop", sites=["ebay"], query="x1 carbon")
     assert summary["stored"] == 2 and summary["per_site"] == {"ebay": 2}
@@ -74,7 +74,9 @@ def test_run_search_records_site_errors(monkeypatch):
 
     monkeypatch.setattr(fetch, "_get", fail)
     monkeypatch.setattr(
-        fetch, "_get_browser", lambda url, wait=None, timeout=30.0: fetch._browser_unwired(url)
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0, cookies=None: fetch._browser_unwired(url),
     )
     summary = server.run_search("thin-client-laptop", sites=["amazon"])
     assert summary["stored"] == 0

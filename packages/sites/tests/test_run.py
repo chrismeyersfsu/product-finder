@@ -20,7 +20,7 @@ def test_api_unset_falls_through_to_browser(monkeypatch):
     monkeypatch.setattr(
         fetch,
         "_get_browser",
-        lambda url, wait=None, timeout=30.0: (FIXTURES / "ebay.html").read_text(),
+        lambda url, wait=None, timeout=30.0, cookies=None: (FIXTURES / "ebay.html").read_text(),
     )
     result = run.search_site(SITES["ebay"], "thinkpad x1 carbon")
     assert result["error"] is None
@@ -78,7 +78,7 @@ def test_empty_page_falls_through_to_browser(monkeypatch):
     monkeypatch.setattr(
         fetch,
         "_get_browser",
-        lambda url, wait=None, timeout=30.0: (
+        lambda url, wait=None, timeout=30.0, cookies=None: (
             (FIXTURES / "ebay.html").read_text().replace("s-item", "x")
         ),
     )
@@ -102,9 +102,39 @@ def test_search_many_dedupes_and_reports_strategies(monkeypatch):
     monkeypatch.setattr(
         fetch,
         "_get_browser",
-        lambda url, wait=None, timeout=30.0: (FIXTURES / "ebay.html").read_text(),
+        lambda url, wait=None, timeout=30.0, cookies=None: (FIXTURES / "ebay.html").read_text(),
     )
     out = run.search_many([SITES["ebay"]], ["query one", "query two"])
     assert len(out["listings"]) == 2  # same fixture twice -> deduped by url
     assert out["errors"] == {}
     assert out["strategies"] == {"ebay": "browser_css"}
+
+
+def test_facebook_login_wall_error_is_clear(monkeypatch):
+    monkeypatch.delenv("FB_COOKIES", raising=False)
+    monkeypatch.setattr(
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0, cookies=None: (
+            FIXTURES / "facebook_login.html"
+        ).read_text(),
+    )
+    result = run.search_site(SITES["facebook-marketplace"], "x1 carbon")
+    assert result["strategy"] is None and result["listings"] == []
+    assert "login wall — set FB_COOKIES" in result["error"]
+
+
+def test_facebook_cookies_env_reaches_browser_seam(monkeypatch):
+    seen = {}
+
+    def fake_browser(url, wait=None, timeout=30.0, cookies=None):
+        seen["url"], seen["cookies"] = url, cookies
+        return (FIXTURES / "facebook.html").read_text()
+
+    monkeypatch.setattr(fetch, "_get_browser", fake_browser)
+    monkeypatch.setenv("FB_COOKIES", "c_user=1; xs=abc")
+    result = run.search_site(SITES["facebook-marketplace"], "thinkpad")
+    assert result["error"] is None and result["strategy"] == "facebook_marketplace"
+    assert seen["cookies"] == "c_user=1; xs=abc"
+    assert "/marketplace/durham/search" in seen["url"] and "radius=80" in seen["url"]
+    assert len(result["listings"]) == 3

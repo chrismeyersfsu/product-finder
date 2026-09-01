@@ -108,7 +108,7 @@ def add_site(slug: str, name: str, kind: str = "css", config: dict | None = None
 
 
 def list_sites() -> list[dict]:
-    """List configured sites (seeds the 21 built-ins on first call)."""
+    """List configured sites (seeds the 22 built-ins on first call)."""
     conn = _connect()
     _ensure_sites(conn)
     return storage.list_sites(conn)
@@ -215,7 +215,7 @@ def best_deals(product_slug: str, limit: int = 10) -> dict:
 
 
 def seed_defaults() -> dict:
-    """Seed the example product (thin-client laptop) and the 21 built-in sites."""
+    """Seed the example product (thin-client laptop) and the 22 built-in sites."""
     conn = _connect()
     slugs = seed_mod.seed(conn)
     _ensure_sites(conn)

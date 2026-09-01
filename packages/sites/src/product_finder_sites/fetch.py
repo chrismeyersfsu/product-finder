@@ -68,7 +68,9 @@ def _post(url: str, data: str, headers: dict | None = None, timeout: float = 25.
     return _request(req, timeout)
 
 
-def _browser_unwired(url: str, wait_selector: str | None = None, timeout: float = 30.0) -> str:
+def _browser_unwired(
+    url: str, wait_selector: str | None = None, timeout: float = 30.0, cookies: str | None = None
+) -> str:
     raise FetchError(
         "browser fetching not wired: install product-finder-browser "
         "(mcp extra 'browser') and call its wire()"

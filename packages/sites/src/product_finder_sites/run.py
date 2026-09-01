@@ -10,9 +10,14 @@ bot walls often 200 with no items. search_many() dedupes listings by
 url across queries.
 """
 
+import os
 import urllib.parse
 
 from . import api, fetch, parse
+
+# Strategy kinds fetched by the browser seam (config may carry a
+# cookies_env naming an env var whose cookie header logs the page in).
+BROWSER_KINDS = {"browser_css", "facebook_marketplace"}
 
 
 def _strategies(site: dict) -> list[dict]:
@@ -24,11 +29,15 @@ def _strategies(site: dict) -> list[dict]:
 def _fetch(strategy: dict, query: str) -> tuple[str, str]:
     """Returns (body, page_url) for one strategy attempt."""
     kind = strategy["kind"]
+    config = strategy["config"]
     if kind in api.FETCHERS:
-        return api.FETCHERS[kind](strategy["config"], query)
-    url = strategy["config"]["url"].format(query=urllib.parse.quote_plus(query))
-    if kind == "browser_css":
-        return fetch._get_browser(url, strategy["config"].get("wait")), url
+        return api.FETCHERS[kind](config, query)
+    params = {k: v for k, v in config.items() if isinstance(v, str | int | float)}
+    params["query"] = urllib.parse.quote_plus(query)
+    url = config["url"].format(**params)
+    if kind in BROWSER_KINDS:
+        cookies = os.environ.get(config["cookies_env"]) if config.get("cookies_env") else None
+        return fetch._get_browser(url, config.get("wait"), cookies=cookies), url
     return fetch._get(url), url
 
 
@@ -40,6 +49,9 @@ def search_site(site: dict, query: str) -> dict:
             body, page_url = _fetch(strategy, query)
             listings = parse.parse_listings(strategy, page_url, body)
         except fetch.FetchError as e:
+            attempts.append({"strategy": kind, "error": str(e)})
+            continue
+        except parse.LoginWall as e:
             attempts.append({"strategy": kind, "error": str(e)})
             continue
         except Exception as e:  # a bad parse must not kill the run

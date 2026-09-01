@@ -31,7 +31,7 @@ claude mcp add --transport http product-finder http://localhost:8848/mcp
 
 ## MCP tools
 
-- `seed_defaults` — seed the laptop product + the 21 built-in sites
+- `seed_defaults` — seed the laptop product + the 22 built-in sites
 - `add_product` / `list_products` / `get_product` / `delete_product` —
   introduce any new product as pure data, no code
 - `add_site` / `list_sites` / `set_site_enabled` — manage marketplaces
@@ -70,6 +70,22 @@ and why the others didn't (`errors`):
 An empty result page falls through to the next tier too (bot walls
 often answer 200 with no items).
 
+### Facebook Marketplace
+
+`facebook-marketplace` is browser-only: Marketplace is fully
+JS-rendered, has no public API, and usually answers anonymous
+visitors with a login wall (surfaced as the per-site error
+`login wall — set FB_COOKIES`, not a silent empty result). Location
+is plain config: `region` (a Marketplace location slug, default
+`durham`) and `radius_km` (default 80, ~50 miles — covers the
+Triangle; the anonymous URL takes no ZIP code). To search logged in,
+set `FB_COOKIES` to the Cookie header from your **own** logged-in
+browser session (DevTools → Network → any facebook.com request →
+Cookie). The cookies are injected into the throwaway browser context
+for that fetch only — never written to the database, config, or logs.
+Use your own account at your own risk: Facebook rate-limits and may
+challenge automated sessions.
+
 ## Container layout
 
 The Dockerfile has two targets:
@@ -101,7 +117,7 @@ A product is four pieces of data (see the worked example in
 ## Packages
 
 - `packages/core` — data model, SQLite storage, scoring (no network)
-- `packages/sites` — 21 site adapters: tiered strategies, one I/O
+- `packages/sites` — 22 site adapters: tiered strategies, one I/O
   seam (`_get`/`_post`/`_get_browser`), pure parsers
 - `packages/browser` — the Playwright tier, wired into the sites seam
 - `packages/mcp` — the MCP server and search pipeline glue

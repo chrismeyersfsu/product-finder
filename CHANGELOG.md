@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0 — 2026-08-31
+
+- Facebook Marketplace as the 22nd built-in site: browser-only (fully
+  JS-rendered, no public API), card parser with price/title/location
+  heuristics, login-wall detection surfaced as a clear per-site error
+  ("login wall — set FB_COOKIES"), and optional logged-in searching by
+  injecting the `FB_COOKIES` cookie header into the browser context
+  (never persisted). Region and radius are plain site config, seeded
+  for Durham NC (`region=durham`, `radius_km=80`). Browser page waits
+  are now best-effort — a wall page returns its content for parsing
+  instead of dying on a selector timeout.
+
 ## 0.4.0 — 2026-08-31
 
 - Dashboard UI (`ui/`, Astro SSR): deals dashboard with filters and

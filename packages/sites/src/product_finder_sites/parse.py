@@ -7,7 +7,10 @@ parse_listings() never raises on weird markup — it returns whatever it
 could parse — and every returned dict has a non-empty title and an
 absolute url; price/seller/sold_at fields are None when absent (a
 "date" selector in a css config turns eBay "Sold <Mon D, YYYY>"
-captions into an ISO sold_at date).
+captions into an ISO sold_at date). One deliberate exception to
+never-raises: the facebook_marketplace parser raises LoginWall when
+Facebook serves a login page instead of results, so run.py can report
+"login wall" rather than "no items parsed".
 """
 
 import json
@@ -23,6 +26,12 @@ _NUM_RE = re.compile(r"([\d,]+(?:\.\d{1,2})?)")
 _SELLER_RE = re.compile(r"\(([\d,]+)\)\s*([\d.]+)%")
 # eBay sold-listings caption, e.g. "Sold Oct 15, 2025" / "Sold  Oct 5, 2025"
 _SOLD_RE = re.compile(r"sold\s+(\w{3})\.?\s+(\d{1,2}),\s+(\d{4})", re.IGNORECASE)
+# "Durham, NC" — a short place-name span on a Facebook Marketplace card
+_LOCATION_RE = re.compile(r"^[\w .'\u2019-]+,\s*[A-Z]{2}$")
+
+
+class LoginWall(Exception):
+    """A site answered with a login page instead of search results."""
 
 
 def _price(text: str | None) -> float | None:
@@ -174,6 +183,49 @@ def _parse_walmart_api(page_url: str, body: str) -> list[dict]:
     return out
 
 
+def _parse_facebook(page_url: str, body: str) -> list[dict]:
+    """Marketplace cards: item links with obfuscated span classes, so
+    fields come from leaf-span heuristics (price = first $-span, title
+    = longest remaining text, location = "City, ST" span)."""
+    soup = BeautifulSoup(body, "html.parser")
+    anchors = [a for a in soup.select("a[href*='/marketplace/item/']") if a.get("href")]
+    if not anchors:
+        wall_marks = ("login_form", 'action="/login/"', "You must log in")
+        if any(mark in body for mark in wall_marks):
+            raise LoginWall(
+                "login wall — set FB_COOKIES (cookie header from your own logged-in browser)"
+            )
+        return []
+    out, seen = [], set()
+    for anchor in anchors:
+        url = urljoin(page_url, str(anchor["href"]).split("?")[0])
+        if url in seen:
+            continue
+        texts = [
+            s.get_text(" ", strip=True)
+            for s in anchor.find_all("span")
+            if not s.find("span") and s.get_text(strip=True)
+        ]
+        price_text = next((t for t in texts if _PRICE_RE.search(t)), None)
+        rest = [t for t in texts if t != price_text]
+        location = next((t for t in rest if _LOCATION_RE.match(t)), None)
+        title = max((t for t in rest if t != location), key=len, default="")
+        if not title:
+            continue
+        seen.add(url)
+        out.append(
+            {
+                "title": title,
+                "price": _price(price_text),
+                "url": url,
+                "location": location,
+                "seller_rating": None,
+                "seller_feedback_count": None,
+            }
+        )
+    return out
+
+
 def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
     """Dispatch on strategy kind. `strategy` is a {kind, config} dict —
     a flat single-strategy site works too (same shape)."""
@@ -182,6 +234,8 @@ def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
         return _parse_reddit_json(page_url, body)
     if kind in ("css", "browser_css"):
         return _parse_css(strategy["config"], page_url, body)
+    if kind == "facebook_marketplace":
+        return _parse_facebook(page_url, body)
     if kind == "ebay_api":
         return _parse_ebay_api(body)
     if kind == "bestbuy_api":

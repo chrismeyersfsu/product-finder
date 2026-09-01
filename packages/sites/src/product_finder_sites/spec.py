@@ -1,4 +1,4 @@
-"""Built-in site registry: 21 marketplaces as pure data.
+"""Built-in site registry: 22 marketplaces as pure data.
 
 Owns the default site specs — nothing else. A site is
 {slug, name, kind, config}. kind "tiered" holds an ordered
@@ -18,6 +18,14 @@ and will rot as sites redesign. JS-heavy or bot-blocking sites
 shopgoodwill, govdeals) get a browser_css fallback tier; without API
 keys or a wired browser those tiers degrade to per-site errors.
 Craigslist needs a region subdomain in its url.
+
+facebook-marketplace is browser-only (kind "facebook_marketplace":
+fully JS-rendered, no public API, usually login-walled) with its own
+parser in parse.py. config keys: region (a Marketplace location slug,
+default "durham"), radius_km (default 80 ~ 50 miles around the region
+— the URL takes no ZIP anonymously), and cookies_env naming the env
+var (FB_COOKIES) whose cookie-header value, when set, is injected into
+the browser context for a logged-in search.
 """
 
 
@@ -238,6 +246,18 @@ _FLAT_SITES = [
         "span.asset-price",
         "a.asset-title",
     ),
+    {
+        "slug": "facebook-marketplace",
+        "name": "Facebook Marketplace",
+        "kind": "facebook_marketplace",
+        "config": {
+            "url": "https://www.facebook.com/marketplace/{region}/search"
+            "?query={query}&radius={radius_km}",
+            "region": "durham",
+            "radius_km": 80,
+            "cookies_env": "FB_COOKIES",
+        },
+    },
     {
         "slug": "reddit-hardwareswap",
         "name": "r/hardwareswap",

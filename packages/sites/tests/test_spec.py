@@ -1,4 +1,4 @@
-"""Registry contract: 21 sites, unique slugs, ordered strategies, complete configs."""
+"""Registry contract: 22 sites, unique slugs, ordered strategies, complete configs."""
 
 from product_finder_sites.spec import BUILTIN_SITES, JS_HEAVY
 
@@ -11,9 +11,18 @@ def _strategies(site):
     return [{"kind": site["kind"], "config": site["config"]}]
 
 
-def test_twenty_one_sites_unique_slugs():
+def test_twenty_two_sites_unique_slugs():
     slugs = [s["slug"] for s in BUILTIN_SITES]
-    assert len(slugs) == 21 and len(set(slugs)) == 21
+    assert len(slugs) == 22 and len(set(slugs)) == 22
+
+
+def test_facebook_marketplace_spec():
+    fb = SITES["facebook-marketplace"]
+    assert fb["kind"] == "facebook_marketplace"
+    assert fb["config"]["region"] == "durham"
+    assert fb["config"]["radius_km"] == 80
+    assert fb["config"]["cookies_env"] == "FB_COOKIES"
+    assert "{region}" in fb["config"]["url"] and "{query}" in fb["config"]["url"]
 
 
 def test_css_configs_complete():
