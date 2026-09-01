@@ -68,10 +68,18 @@ ingress:
   - service: http_status:404
 CFG
 fi
-# Route is create-once; tolerate the record already existing.
-if ! out=$(cloudflared tunnel route dns product-finder "$TUNNEL_HOST" 2>&1); then
-    grep -qi "already exists\|already configured" <<<"$out" \
-        || { echo "$out"; exit 1; }
+# Route is create-once; tolerate the record already existing — but only
+# when it targets THIS tunnel. Without --config and the UUID, cloudflared
+# reads the default config.yml and binds the record to that tunnel instead.
+out=$(cloudflared --config "$HOME/.cloudflared/product-finder.yml" \
+    tunnel route dns "$TUNNEL_ID" "$TUNNEL_HOST" 2>&1) || true
+if grep -qi "already exists\|already configured" <<<"$out" && ! grep -q "$TUNNEL_ID" <<<"$out"; then
+    echo "$out"
+    echo "DNS record for $TUNNEL_HOST targets a DIFFERENT tunnel; fix with:"
+    echo "    cloudflared --config ~/.cloudflared/product-finder.yml tunnel route dns --overwrite-dns $TUNNEL_ID $TUNNEL_HOST"
+    exit 1
+elif ! grep -qiE "Added CNAME|already" <<<"$out"; then
+    echo "$out"; exit 1
 fi
 echo "route: $TUNNEL_HOST -> tunnel $TUNNEL_ID"
 

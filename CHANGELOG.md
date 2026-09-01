@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+- Fixed: install.sh now pins the DNS route to the product-finder tunnel
+  (explicit --config + UUID) and fails loudly when the record targets a
+  different tunnel, instead of printing success over a wrong binding.
+
 ## 0.7.0
 
 - Hourly scheduled scrape: `product-finder-scrape.timer` runs a oneshot
