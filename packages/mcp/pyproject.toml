@@ -10,6 +10,7 @@ browser = ["product-finder-browser"]
 
 [project.scripts]
 product-finder-mcp = "product_finder_mcp.server:main"
+product-finder-scrape = "product_finder_mcp.scrape:main"
 
 [dependency-groups]
 dev = ["pytest>=8"]

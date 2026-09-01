@@ -86,12 +86,12 @@ fi
 # Stale host-process units would shadow the quadlet generator.
 rm -f "$UNIT_DIR"/product-finder-ui.service "$UNIT_DIR"/product-finder-mcp.service
 cp ./*.container "$QUADLET_DIR/"
-cp ./*.service "$UNIT_DIR/"
+cp ./*.service ./*.timer "$UNIT_DIR/"
 systemctl --user daemon-reload
 loginctl enable-linger "$USER" || true
 
 echo "== starting services =="
-systemctl --user enable --now product-finder-tunnel.service
+systemctl --user enable --now product-finder-tunnel.service product-finder-scrape.timer
 # Skip the restarts when nothing a running service consumes has changed:
 # the images or the unit files.
 INFRA_HASH=$( (cd "$REPO" && find infra/systemd -type f -print0 \
@@ -106,4 +106,5 @@ else
 fi
 
 systemctl --user --no-pager --plain list-units 'product-finder-*'
+echo "Timer: systemctl --user list-timers product-finder-scrape.timer"
 echo "Done. Dashboard: https://$TUNNEL_HOST"

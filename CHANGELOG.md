@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- Hourly scheduled scrape: `product-finder-scrape.timer` runs a oneshot
+  container over every product (`product-finder-scrape` entrypoint);
+  per-site summary in the journal, non-zero exit only on total failure.
+- SQLite `busy_timeout=10000` so the scrape oneshot and the MCP service
+  can share the database.
+
 ## 0.6.0
 
 - Deployment: `infra/systemd/` with podman quadlets (mcp, ui), a

@@ -96,6 +96,7 @@ def connect(path: str | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(path or DEFAULT_DB)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(_SCHEMA)
     return conn

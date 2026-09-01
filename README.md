@@ -196,6 +196,10 @@ What it sets up:
   tree.
 - `product-finder-ui.container` — dashboard (127.0.0.1:4321), same db
   bind mount, read-only access.
+- `product-finder-scrape.timer` + `.container` — hourly oneshot from
+  the same browser image scraping every product (missed ticks fire on
+  wake; `journalctl --user -u product-finder-scrape` shows the per-site
+  summary; the run exits non-zero only when every site errored).
 - `product-finder-tunnel.service` — cloudflared serving
   https://product-finder.judicialschedule.com (config in
   `~/.cloudflared/product-finder.yml`; the installer writes it and the

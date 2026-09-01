@@ -1,0 +1,21 @@
+# Timer-driven batch job (see product-finder-scrape.timer): scrape every
+# product across all enabled sites. No [Install] section on purpose —
+# the timer starts it, not boot. If a run outlives the hourly interval,
+# systemd skips the trigger (a unit is a singleton); SQLite WAL plus the
+# storage layer's busy_timeout are the cross-container backstop while
+# the mcp service holds the same db.
+[Unit]
+Description=Product Finder scrape run (all products, all enabled sites)
+
+[Container]
+Image=localhost/product-finder:latest
+ContainerName=product-finder-scrape
+Network=host
+Volume=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data:/home/cmeyers/github.com/chrismeyersfsu/product-finder/data:Z
+Environment=PF_DB=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data/product_finder.db
+Exec=product-finder-scrape
+
+[Service]
+Type=oneshot
+# generous ceiling so a hung site or browser render can't wedge the timer forever
+TimeoutStartSec=50min

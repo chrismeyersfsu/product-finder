@@ -1,0 +1,13 @@
+[Unit]
+Description=Scrape all products hourly
+
+[Timer]
+OnCalendar=hourly
+# laptop/WSL host: a missed tick (suspend, reboot) fires once on wake
+# instead of silently skipping the hour
+Persistent=true
+# if a run is still active when the timer fires, the start is a no-op —
+# systemd never launches a second instance of an active unit
+
+[Install]
+WantedBy=timers.target
