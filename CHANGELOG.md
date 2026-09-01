@@ -12,6 +12,14 @@
   query param so filtered views are shareable. Entity colors are
   unaffected by filtering.
 
+## 0.7.0
+
+- Hourly scheduled scrape: `product-finder-scrape.timer` runs a oneshot
+  container over every product (`product-finder-scrape` entrypoint);
+  per-site summary in the journal, non-zero exit only on total failure.
+- SQLite `busy_timeout=10000` so the scrape oneshot and the MCP service
+  can share the database.
+
 ## 0.6.2
 
 - Laptop seed: parts/accessory/broken listings (motherboards, screens,
@@ -23,14 +31,6 @@
 - Fixed: install.sh now pins the DNS route to the product-finder tunnel
   (explicit --config + UUID) and fails loudly when the record targets a
   different tunnel, instead of printing success over a wrong binding.
-
-## 0.7.0
-
-- Hourly scheduled scrape: `product-finder-scrape.timer` runs a oneshot
-  container over every product (`product-finder-scrape` entrypoint);
-  per-site summary in the journal, non-zero exit only on total failure.
-- SQLite `busy_timeout=10000` so the scrape oneshot and the MCP service
-  can share the database.
 
 ## 0.6.0
 
@@ -83,6 +83,7 @@
 - New MCP tools: `run_backtest`, `get_backtest`, `list_backtests`,
   `backfill_ebay_sold`, `price_history_stats`, `add_price_observation`.
 - eBay sold-listings parsing (`sold_at` from "Sold <date>" captions).
+
 ## 0.2.0 — 2026-08-31
 
 - Tiered fetching per site, tried best-first and recorded per run:
