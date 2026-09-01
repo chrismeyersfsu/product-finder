@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.0
+
+- UI: sortable table headers on the deals table, history table view,
+  sites view, and backtests list — click or Enter/Space toggles
+  asc/desc with an arrow + `aria-sort` indicator; numeric columns sort
+  numerically with blanks last; one shared snippet in the layout.
+- UI: multi-select site filter on Deals and History (checkbox dropdown
+  with "All sites" reset and count badge). Empty selection = all
+  sites; selection round-trips through a comma-separated `sites`
+  query param so filtered views are shareable. Entity colors are
+  unaffected by filtering.
+
 ## 0.6.2
 
 - Laptop seed: parts/accessory/broken listings (motherboards, screens,

@@ -3,6 +3,7 @@
  * scatter and its table twin. */
 import EmptyState from "../components/EmptyState.astro";
 import HistoryChart from "../components/HistoryChart.astro";
+import SiteMultiSelect from "../components/SiteMultiSelect.astro";
 import StatTile from "../components/StatTile.astro";
 import Layout from "../layouts/Layout.astro";
 import * as db from "../lib/db";
@@ -12,8 +13,11 @@ const products = db.listProducts();
 const url = Astro.url;
 const productSlug = url.searchParams.get("product") || products[0]?.slug || "";
 const kind = url.searchParams.get("kind") || "";
+const selectedSites = (url.searchParams.get("sites") ?? "").split(",").filter(Boolean);
 const range = url.searchParams.get("range") || "365";
 let obs = productSlug ? db.history(productSlug, kind || undefined) : [];
+if (selectedSites.length) obs = obs.filter((o) => selectedSites.includes(o.site_slug));
+const historySiteOptions = productSlug ? db.historySites(productSlug) : [];
 if (range !== "all") {
   const cutoff = Date.now() - Number(range) * 86400_000;
   obs = obs.filter((o) => Date.parse(o.observed_at) >= cutoff);
@@ -38,6 +42,7 @@ const sold = obs.filter((o) => o.kind === "sold").length;
         <option value="all" selected={range === "all"}>all time</option>
       </select>
     </label>
+    <SiteMultiSelect options={historySiteOptions} selected={selectedSites} />
     <label>Kind
       <select name="kind">
         <option value="">seen + sold</option>
@@ -64,7 +69,7 @@ const sold = obs.filter((o) => o.kind === "sold").length;
         <details class="tableview">
           <summary>Table view ({obs.length} rows)</summary>
           <div class="wrap-x">
-            <table class="data">
+            <table class="data" data-sortable>
               <thead><tr><th>Date</th><th>Site</th><th class="num">Price</th><th>Kind</th><th class="num">Score</th><th>Listing</th></tr></thead>
               <tbody>
                 {[...obs].reverse().map((o) => (

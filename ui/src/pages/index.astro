@@ -2,6 +2,7 @@
 /** Deals dashboard: one filter row scoping the KPI tiles, the deals
  * table, and the manual-checks card below it. */
 import EmptyState from "../components/EmptyState.astro";
+import SiteMultiSelect from "../components/SiteMultiSelect.astro";
 import StatTile from "../components/StatTile.astro";
 import Layout from "../layouts/Layout.astro";
 import { siteVar } from "../lib/colors";
@@ -14,12 +15,12 @@ const productSlug = url.searchParams.get("product") || products[0]?.slug || "";
 const product = products.find((p) => p.slug === productSlug);
 const minScore = url.searchParams.get("min_score");
 const maxPrice = url.searchParams.get("max_price");
-const site = url.searchParams.get("site") || "";
+const selectedSites = (url.searchParams.get("sites") ?? "").split(",").filter(Boolean);
 const includeHardFails = url.searchParams.get("hard_fails") === "1";
 const filters: db.DealFilters = {
   minScore: minScore ? Number(minScore) : undefined,
   maxPrice: maxPrice ? Number(maxPrice) : undefined,
-  site: site || undefined,
+  sites: selectedSites.length ? selectedSites : undefined,
   includeHardFails,
 };
 const rows = product ? db.deals(productSlug, filters) : [];
@@ -44,12 +45,7 @@ const nSites = new Set(rows.map((r) => r.site_slug)).size;
     <label>Max price
       <input type="number" name="max_price" min="0" step="10" value={maxPrice ?? ""} placeholder="any" />
     </label>
-    <label>Site
-      <select name="site">
-        <option value="">all sites</option>
-        {sites.map((s) => <option value={s} selected={s === site}>{s}</option>)}
-      </select>
-    </label>
+    <SiteMultiSelect options={sites} selected={selectedSites} />
     <label class="chk"><input type="checkbox" name="hard_fails" value="1" checked={includeHardFails} /> include hard fails</label>
     <button type="submit">Apply</button>
   </form>
@@ -69,11 +65,11 @@ const nSites = new Set(rows.map((r) => r.site_slug)).size;
         <div class="card">
           <h2>Best deals <span class="sub">— sorted by score, then price</span></h2>
           <div class="wrap-x">
-            <table class="data">
+            <table class="data" data-sortable>
               <thead>
                 <tr>
                   <th>Listing</th><th>Site</th><th class="num">Price</th><th class="num">vs median</th>
-                  <th class="num">Score</th><th>Condition</th><th class="num">Seller</th><th>Last seen</th>
+                  <th class="num" aria-sort="descending">Score</th><th>Condition</th><th class="num">Seller</th><th>Last seen</th>
                 </tr>
               </thead>
               <tbody>

@@ -71,5 +71,59 @@ const tabs = [
       });
       document.addEventListener("pointerleave", () => (tip.style.display = "none"));
     </script>
+    <script>
+      // Shared sortable tables: any `table.data[data-sortable]` gets
+      // clickable, keyboard-operable headers. Numeric columns (th.num)
+      // sort numerically, first activation descending; text columns
+      // case-insensitively, first activation ascending. Nulls ("—" or
+      // empty) sort last in both directions; ties keep document order.
+      // Direction is exposed via aria-sort (arrow drawn in CSS).
+      function sortBy(th: HTMLTableCellElement) {
+        const table = th.closest("table");
+        const tbody = table?.tBodies[0];
+        const headRow = th.parentElement;
+        if (!table || !tbody || !headRow) return;
+        const idx = Array.prototype.indexOf.call(headRow.children, th);
+        const numeric = th.classList.contains("num");
+        const first = numeric ? "descending" : "ascending";
+        const dir = th.getAttribute("aria-sort") === first
+          ? first === "ascending" ? "descending" : "ascending"
+          : first;
+        for (const h of headRow.children) h.removeAttribute("aria-sort");
+        th.setAttribute("aria-sort", dir);
+        const key = (row: HTMLTableRowElement): number | string | null => {
+          const text = (row.cells[idx]?.textContent ?? "").trim();
+          if (text === "" || text === "\u2014") return null;
+          if (!numeric) return text.toLowerCase();
+          const n = parseFloat(text.replace(/[$,]/g, ""));
+          return Number.isNaN(n) ? null : n;
+        };
+        const mul = dir === "ascending" ? 1 : -1;
+        Array.from(tbody.rows)
+          .map((r, i) => ({ r, i, v: key(r) }))
+          .sort((a, b) => {
+            if (a.v == null || b.v == null)
+              return a.v == null && b.v == null ? a.i - b.i : a.v == null ? 1 : -1;
+            const c =
+              typeof a.v === "number" && typeof b.v === "number"
+                ? a.v - b.v
+                : String(a.v).localeCompare(String(b.v));
+            return c ? c * mul : a.i - b.i;
+          })
+          .forEach(({ r }) => tbody.appendChild(r));
+      }
+      for (const th of document.querySelectorAll<HTMLTableCellElement>(
+        "table[data-sortable] thead th"
+      )) {
+        th.tabIndex = 0;
+        th.addEventListener("click", () => sortBy(th));
+        th.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            sortBy(th);
+          }
+        });
+      }
+    </script>
   </body>
 </html>

@@ -64,7 +64,7 @@ export interface SearchRun {
 export interface DealFilters {
   minScore?: number;
   maxPrice?: number;
-  site?: string;
+  sites?: string[];
   includeHardFails?: boolean;
   limit?: number;
 }
@@ -121,7 +121,10 @@ export function deals(productSlug: string, f: DealFilters = {}): Listing[] {
     const args: unknown[] = [productSlug];
     if (f.minScore != null) { sql += " AND score >= ?"; args.push(f.minScore); }
     if (f.maxPrice != null) { sql += " AND price IS NOT NULL AND price <= ?"; args.push(f.maxPrice); }
-    if (f.site) { sql += " AND site_slug = ?"; args.push(f.site); }
+    if (f.sites?.length) {
+      sql += ` AND site_slug IN (${f.sites.map(() => "?").join(",")})`;
+      args.push(...f.sites);
+    }
     if (!f.includeHardFails) sql += " AND hard_fails = '[]'";
     sql += " ORDER BY score DESC NULLS LAST, price ASC NULLS LAST LIMIT ?";
     args.push(f.limit ?? 100);
@@ -178,6 +181,16 @@ export function history(productSlug: string, kind?: string): Observation[] {
     sql += " ORDER BY observed_at";
     return db.prepare(sql).all(...args) as Observation[];
   });
+}
+
+
+export function historySites(productSlug: string): string[] {
+  return withDb([] as string[], (db) =>
+    db
+      .prepare("SELECT DISTINCT site_slug FROM price_history WHERE product_slug = ? ORDER BY site_slug")
+      .all(productSlug)
+      .map((r: any) => r.site_slug)
+  );
 }
 
 export function listSites(): SiteRow[] {

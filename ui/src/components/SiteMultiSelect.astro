@@ -1,0 +1,54 @@
+---
+/** Multi-select site filter: checkbox dropdown with an "All sites"
+ * reset and a count badge. Empty selection means all sites. Submits a
+ * single comma-separated `sites` query param via the hidden input
+ * (checkboxes are nameless), so filtered views are shareable and
+ * survive reload. Keyboard: summary toggles, checkboxes tab, Esc
+ * closes. Filtering never changes entity colors — those come from the
+ * fixed site roster, not from what is selected. */
+interface Props { options: string[]; selected: string[] }
+const { options, selected } = Astro.props;
+const active = selected.filter((s) => options.includes(s));
+---
+<div class="msel-wrap">
+  <span class="msel-caption">Sites</span>
+  <details class="msel" data-msel>
+    <summary>
+      <span class="badge" data-msel-badge>{active.length ? `${active.length} selected` : "all sites"}</span>
+    </summary>
+    <div class="msel-panel">
+      <button type="button" class="msel-clear" data-msel-clear>All sites (clear)</button>
+      <div class="msel-list">
+        {options.map((o) => (
+          <label class="msel-opt"><input type="checkbox" value={o} checked={active.includes(o)} data-msel-box /> {o}</label>
+        ))}
+      </div>
+    </div>
+  </details>
+  <input type="hidden" name="sites" value={active.join(",")} data-msel-hidden />
+</div>
+<script>
+  for (const el of document.querySelectorAll<HTMLDetailsElement>("[data-msel]")) {
+    const root = el;
+    const wrap = root.closest(".msel-wrap");
+    const hidden = wrap?.querySelector<HTMLInputElement>("[data-msel-hidden]");
+    const badge = root.querySelector("[data-msel-badge]");
+    const boxes = Array.from(root.querySelectorAll<HTMLInputElement>("[data-msel-box]"));
+    const sync = () => {
+      const on = boxes.filter((b) => b.checked);
+      if (hidden) hidden.value = on.map((b) => b.value).join(",");
+      if (badge) badge.textContent = on.length ? `${on.length} selected` : "all sites";
+    };
+    for (const b of boxes) b.addEventListener("change", sync);
+    root.querySelector("[data-msel-clear]")?.addEventListener("click", () => {
+      for (const b of boxes) b.checked = false;
+      sync();
+    });
+    root.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") root.open = false;
+    });
+    document.addEventListener("click", (e) => {
+      if (root.open && !root.contains(e.target as Node)) root.open = false;
+    });
+  }
+</script>

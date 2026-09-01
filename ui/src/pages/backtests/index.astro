@@ -13,8 +13,8 @@ const rows = db.listBacktests();
   ) : (
     <div class="card">
       <h2>Backtests <span class="sub">— stored in SQLite; run more via the MCP tool run_backtest</span></h2>
-      <table class="data">
-        <thead><tr><th class="num">#</th><th>Product</th><th>Windows</th><th class="num">Pivots</th><th class="num">Min score</th><th>Created</th></tr></thead>
+      <table class="data" data-sortable>
+        <thead><tr><th class="num" aria-sort="descending">#</th><th>Product</th><th>Windows</th><th class="num">Pivots</th><th class="num">Min score</th><th>Created</th></tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr>

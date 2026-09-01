@@ -22,7 +22,7 @@ for (const run of runs)
     <div class="card">
       <h2>Site health <span class="sub">— latest result per site, {runs.length} recent runs</span></h2>
       <div class="wrap-x">
-        <table class="data">
+        <table class="data" data-sortable>
           <thead><tr><th>Site</th><th>Strategy</th><th>Enabled</th><th>Last result</th><th class="num">Listings</th><th>Last error</th></tr></thead>
           <tbody>
             {sites.map((s) => {
