@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1
+
+- Fixed: newly added built-in sites now seed into existing databases
+  (previously only an empty sites table was seeded).
+
 ## 0.5.0 — 2026-08-31
 
 - Facebook Marketplace as the 22nd built-in site: browser-only (fully

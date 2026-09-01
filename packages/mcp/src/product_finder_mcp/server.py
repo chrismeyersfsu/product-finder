@@ -120,8 +120,9 @@ def set_site_enabled(slug: str, enabled: bool) -> dict:
 
 
 def _ensure_sites(conn) -> None:
-    if not storage.list_sites(conn):
-        for site in BUILTIN_SITES:
+    have = {s["slug"] for s in storage.list_sites(conn)}
+    for site in BUILTIN_SITES:
+        if site["slug"] not in have:
             storage.upsert_site(conn, site)
 
 
