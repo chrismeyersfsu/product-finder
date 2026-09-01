@@ -97,4 +97,4 @@ def test_project_tools_scoped_to_root(tmp_path, monkeypatch):
 
 
 def test_tools_registered():
-    assert len(server.TOOLS) == 15
+    assert len(server.TOOLS) == 21

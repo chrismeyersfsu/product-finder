@@ -64,6 +64,41 @@ A product is four pieces of data (see the worked example in
 - `packages/sites` — 21 site adapters: one HTTP seam, pure parsers
 - `packages/mcp` — the MCP server and search pipeline glue
 
+## Backtesting deals
+
+Does waiting longer actually get a better price — and which site wins?
+`run_backtest` samples random **pivot dates** from the past year of
+observed history (seeded, so results are reproducible) and asks, for
+each pivot: what was the best qualifying deal in the trailing 3 days,
+1, 2, 4, 8, and 16 weeks? It then compares each longer window against
+the 3-day baseline with paired differences and a 95% bootstrap CI, and
+reports per-site win rates. Results are stored in SQLite
+(`backtests` table) — interact with them via `get_backtest` /
+`list_backtests`.
+
+The honest part: **backtests only see prices this database has
+observed.** There is no way to scrape a year of history on demand.
+History accrues three ways:
+
+- every `run_search` appends `kind='seen'` observations to
+  `price_history`;
+- `backfill_ebay_sold` pulls real eBay sold/completed listings with
+  their sale dates (`kind='sold'`) — eBay exposes roughly the last 90
+  days;
+- `add_price_observation` records points by hand (or from an import).
+
+Until the span covers a window, that window is dropped and listed in
+`coverage.dropped_windows`; windows with fewer than 30 data-bearing
+pivots are flagged `insufficient_data` instead of being interpreted.
+Every result carries a `caveats` list (notably: overlapping windows
+share observations, so CIs are optimistic). Read the `verdict` block
+first — it says, in plain English, whether waiting helps, by how many
+dollars, whether that difference is statistically distinguishable from
+zero, and which site supplies the winning deal most often.
+
+Example, over MCP: `run_backtest("thin-client-laptop")`, later
+`list_backtests()` and `get_backtest(id)`.
+
 ## Caveats — read before trusting results
 
 - Scraping selectors rot. The built-in specs are best-effort snapshots;

@@ -30,6 +30,25 @@ def _css(slug, name, url, item, title, price, link, link_attr="href", seller=Non
     return {"slug": slug, "name": name, "kind": "css", "config": config}
 
 
+# Not part of BUILTIN_SITES: eBay *sold/completed* listings, used to
+# backfill real historical sale prices (eBay exposes roughly the last
+# 90 days). Same css machinery; the "date" selector yields sold_at.
+EBAY_SOLD = {
+    "slug": "ebay-sold",
+    "name": "eBay sold listings",
+    "kind": "css",
+    "config": {
+        "url": "https://www.ebay.com/sch/i.html?_nkw={query}&LH_Sold=1&LH_Complete=1&_sop=13",
+        "item": "li.s-item",
+        "title": ".s-item__title",
+        "price": ".s-item__price",
+        "link": "a.s-item__link",
+        "link_attr": "href",
+        "seller": ".s-item__seller-info-text",
+        "date": ".s-item__caption",
+    },
+}
+
 BUILTIN_SITES = [
     _css(
         "ebay",

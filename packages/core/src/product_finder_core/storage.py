@@ -1,6 +1,7 @@
 """SQLite persistence for products, sites, and listings.
 
-Owns the schema, connections, and all SQL. Never does network I/O and
+Owns the schema, connections, and all SQL — including the append-only
+price_history observations and stored backtest results. Never does network I/O and
 never interprets criteria (scoring.py owns that). Callers rely on:
 JSON-typed columns are always valid JSON, `connect()` returns rows as
 sqlite3.Row, and upsert_listing() keys on (product_slug, url) so
@@ -59,6 +60,28 @@ CREATE TABLE IF NOT EXISTS search_runs (
   started_at TEXT NOT NULL,
   finished_at TEXT,
   site_results TEXT NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS price_history (
+  id INTEGER PRIMARY KEY,
+  product_slug TEXT NOT NULL,
+  site_slug TEXT NOT NULL,
+  url TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  price REAL NOT NULL,
+  score REAL,
+  hard_fails TEXT NOT NULL DEFAULT '[]',
+  kind TEXT NOT NULL DEFAULT 'seen',
+  observed_at TEXT NOT NULL,
+  UNIQUE(product_slug, url, observed_at)
+);
+CREATE INDEX IF NOT EXISTS idx_price_history_lookup
+  ON price_history(product_slug, observed_at);
+CREATE TABLE IF NOT EXISTS backtests (
+  id INTEGER PRIMARY KEY,
+  product_slug TEXT NOT NULL,
+  params TEXT NOT NULL DEFAULT '{}',
+  results TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
 );
 """
 
@@ -242,3 +265,110 @@ def record_search_run(conn: sqlite3.Connection, product_slug: str, site_results:
     )
     conn.commit()
     return cur.lastrowid
+
+
+def append_observation(conn: sqlite3.Connection, obs: dict) -> bool:
+    """Append one price observation; returns False if (product, url,
+    observed_at) was already recorded."""
+    cur = conn.execute(
+        """INSERT OR IGNORE INTO price_history
+             (product_slug, site_slug, url, title, price, score, hard_fails, kind, observed_at)
+           VALUES (:product_slug, :site_slug, :url, :title, :price, :score, :hard_fails,
+                   :kind, :observed_at)""",
+        {
+            "product_slug": obs["product_slug"],
+            "site_slug": obs["site_slug"],
+            "url": obs.get("url", ""),
+            "title": obs.get("title", ""),
+            "price": obs["price"],
+            "score": obs.get("score"),
+            "hard_fails": json.dumps(obs.get("hard_fails", [])),
+            "kind": obs.get("kind", "seen"),
+            "observed_at": obs.get("observed_at") or _now(),
+        },
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def query_observations(
+    conn: sqlite3.Connection, product_slug: str, kinds: list[str] | None = None
+) -> list[dict]:
+    sql = "SELECT * FROM price_history WHERE product_slug=?"
+    args: list = [product_slug]
+    if kinds:
+        sql += f" AND kind IN ({','.join('?' * len(kinds))})"
+        args.extend(kinds)
+    sql += " ORDER BY observed_at"
+    out = []
+    for row in conn.execute(sql, args).fetchall():
+        d = dict(row)
+        d["hard_fails"] = json.loads(d["hard_fails"])
+        out.append(d)
+    return out
+
+
+def history_stats(conn: sqlite3.Connection, product_slug: str) -> dict:
+    row = conn.execute(
+        "SELECT COUNT(*) n, MIN(observed_at) first, MAX(observed_at) last"
+        " FROM price_history WHERE product_slug=?",
+        (product_slug,),
+    ).fetchone()
+    per_site = {
+        r["site_slug"]: r["n"]
+        for r in conn.execute(
+            "SELECT site_slug, COUNT(*) n FROM price_history WHERE product_slug=?"
+            " GROUP BY site_slug",
+            (product_slug,),
+        )
+    }
+    per_kind = {
+        r["kind"]: r["n"]
+        for r in conn.execute(
+            "SELECT kind, COUNT(*) n FROM price_history WHERE product_slug=? GROUP BY kind",
+            (product_slug,),
+        )
+    }
+    return {
+        "observations": row["n"],
+        "first_observed": row["first"],
+        "last_observed": row["last"],
+        "per_site": per_site,
+        "per_kind": per_kind,
+    }
+
+
+def insert_backtest(
+    conn: sqlite3.Connection, product_slug: str, params: dict, results: dict
+) -> int:
+    cur = conn.execute(
+        "INSERT INTO backtests (product_slug, params, results, created_at) VALUES (?, ?, ?, ?)",
+        (product_slug, json.dumps(params), json.dumps(results), _now()),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_backtest(conn: sqlite3.Connection, backtest_id: int) -> dict | None:
+    row = conn.execute("SELECT * FROM backtests WHERE id=?", (backtest_id,)).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    d["params"] = json.loads(d["params"])
+    d["results"] = json.loads(d["results"])
+    return d
+
+
+def list_backtests(conn: sqlite3.Connection, product_slug: str | None = None) -> list[dict]:
+    sql = "SELECT id, product_slug, params, created_at FROM backtests"
+    args: list = []
+    if product_slug:
+        sql += " WHERE product_slug=?"
+        args.append(product_slug)
+    sql += " ORDER BY id DESC"
+    out = []
+    for row in conn.execute(sql, args).fetchall():
+        d = dict(row)
+        d["params"] = json.loads(d["params"])
+        out.append(d)
+    return out

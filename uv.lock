@@ -8,6 +8,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "product-finder-backtest",
     "product-finder-core",
     "product-finder-mcp",
     "product-finder-sites",
@@ -375,6 +376,21 @@ wheels = [
 ]
 
 [[package]]
+name = "product-finder-backtest"
+version = "0.1.0"
+source = { editable = "packages/backtest" }
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8" }]
+
+[[package]]
 name = "product-finder-core"
 version = "0.1.0"
 source = { editable = "packages/core" }
@@ -395,6 +411,7 @@ version = "0.1.0"
 source = { editable = "packages/mcp" }
 dependencies = [
     { name = "mcp" },
+    { name = "product-finder-backtest" },
     { name = "product-finder-core" },
     { name = "product-finder-sites" },
 ]
@@ -407,6 +424,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "mcp", specifier = ">=2" },
+    { name = "product-finder-backtest", editable = "packages/backtest" },
     { name = "product-finder-core", editable = "packages/core" },
     { name = "product-finder-sites", editable = "packages/sites" },
 ]

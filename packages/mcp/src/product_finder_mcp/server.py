@@ -1,4 +1,4 @@
-"""MCP server: products, sites, searches, deals, and project self-modification.
+"""MCP server: products, sites, searches, deals, backtests, and project self-modification.
 
 Owns the MCP app (MCPServer), tool functions, and orchestration of
 core (storage/scoring) + sites (fetch/parse). Never bypasses the
@@ -15,10 +15,11 @@ import subprocess
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
+from product_finder_backtest import engine
 from product_finder_core import scoring, storage
 from product_finder_core import seed as seed_mod
 from product_finder_sites import run as run_mod
-from product_finder_sites.spec import BUILTIN_SITES
+from product_finder_sites.spec import BUILTIN_SITES, EBAY_SOLD
 
 app = MCPServer("product-finder")
 
@@ -150,6 +151,17 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
                 "hard_fails": hard_fails,
             },
         )
+        if li.get("price"):
+            storage.append_observation(
+                conn,
+                {
+                    **li,
+                    "product_slug": product_slug,
+                    "score": round(score, 3),
+                    "hard_fails": hard_fails,
+                    "kind": "seen",
+                },
+            )
         counts[li["site_slug"]] = counts.get(li["site_slug"], 0) + 1
     summary = {"stored": len(result["listings"]), "per_site": counts, "errors": result["errors"]}
     storage.record_search_run(conn, product_slug, summary)
@@ -194,6 +206,124 @@ def seed_defaults() -> dict:
     slugs = seed_mod.seed(conn)
     _ensure_sites(conn)
     return {"products": slugs, "sites": [s["slug"] for s in storage.list_sites(conn)]}
+
+
+def _score_for(product: dict, title: str) -> tuple[float, list[str], dict]:
+    attrs = scoring.extract_attrs(title, product["extractors"])
+    score, hard_fails = scoring.score_listing(attrs, product["criteria"])
+    return round(score, 3), hard_fails, attrs
+
+
+def backfill_ebay_sold(product_slug: str, query: str | None = None) -> dict:
+    """Backfill real historical sale prices from eBay sold/completed
+    listings (eBay exposes roughly the last 90 days). Observations are
+    scored like live search results and stored as kind='sold'."""
+    conn = _connect()
+    product = storage.get_product(conn, product_slug)
+    if not product:
+        return {"error": f"no product: {product_slug}"}
+    queries = [query] if query else product["queries"]
+    added = skipped = 0
+    errors = []
+    for q in queries:
+        result = run_mod.search_site(EBAY_SOLD, q)
+        if result["error"]:
+            errors.append(f"{q}: {result['error']}")
+            continue
+        for li in result["listings"]:
+            if not li.get("price") or not li.get("sold_at"):
+                skipped += 1
+                continue
+            score, hard_fails, _ = _score_for(product, li["title"])
+            fresh = storage.append_observation(
+                conn,
+                {
+                    "product_slug": product_slug,
+                    "site_slug": "ebay",
+                    "url": li["url"],
+                    "title": li["title"],
+                    "price": li["price"],
+                    "score": score,
+                    "hard_fails": hard_fails,
+                    "kind": "sold",
+                    "observed_at": li["sold_at"],
+                },
+            )
+            added += 1 if fresh else 0
+    return {"added": added, "skipped_no_price_or_date": skipped, "errors": errors}
+
+
+def add_price_observation(
+    product_slug: str,
+    site_slug: str,
+    price: float,
+    observed_at: str,
+    title: str = "",
+    url: str = "",
+    kind: str = "seen",
+) -> dict:
+    """Manually record one historical price point (ISO observed_at).
+    If a title is given it is scored against the product's criteria."""
+    conn = _connect()
+    product = storage.get_product(conn, product_slug)
+    if not product:
+        return {"error": f"no product: {product_slug}"}
+    score, hard_fails, _ = _score_for(product, title) if title else (None, [], {})
+    added = storage.append_observation(
+        conn,
+        {
+            "product_slug": product_slug,
+            "site_slug": site_slug,
+            "url": url,
+            "title": title,
+            "price": price,
+            "score": score,
+            "hard_fails": hard_fails,
+            "kind": kind,
+            "observed_at": observed_at,
+        },
+    )
+    return {"added": added}
+
+
+def price_history_stats(product_slug: str) -> dict:
+    """Observation counts, span, and per-site/per-kind mix for a product."""
+    return storage.history_stats(_connect(), product_slug)
+
+
+def run_backtest(
+    product_slug: str,
+    windows: list[int] | None = None,
+    n_pivots: int = 200,
+    min_score: float = 0.5,
+    seed: int = 0,
+    kinds: list[str] | None = None,
+) -> dict:
+    """Backtest 'best deal found' over lookback windows (default 3d,
+    1/2/4/8/16 weeks) from n_pivots random pivot dates within the past
+    year of observed history. Answers: does waiting longer get a
+    better deal, and which site wins? Result is stored; interact with
+    it later via get_backtest/list_backtests."""
+    conn = _connect()
+    if not storage.get_product(conn, product_slug):
+        return {"error": f"no product: {product_slug}"}
+    observations = storage.query_observations(conn, product_slug, kinds=kinds)
+    results = engine.run(
+        observations, windows=windows, n_pivots=n_pivots, min_score=min_score, seed=seed
+    )
+    backtest_id = storage.insert_backtest(conn, product_slug, results["params"], results)
+    return {"backtest_id": backtest_id, **results}
+
+
+def get_backtest(backtest_id: int) -> dict:
+    """Fetch one stored backtest result by id."""
+    row = storage.get_backtest(_connect(), backtest_id)
+    return row or {"error": f"no backtest: {backtest_id}"}
+
+
+def list_backtests(product_slug: str | None = None) -> list[dict]:
+    """List stored backtests (id, product, params, created_at), newest first."""
+    return storage.list_backtests(_connect(), product_slug)
 
 
 def project_list_files(pattern: str = "*") -> list[str]:
@@ -251,6 +381,12 @@ TOOLS = [
     query_listings,
     best_deals,
     seed_defaults,
+    backfill_ebay_sold,
+    add_price_observation,
+    price_history_stats,
+    run_backtest,
+    get_backtest,
+    list_backtests,
     project_list_files,
     project_read_file,
     project_write_file,

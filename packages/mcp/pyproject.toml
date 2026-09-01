@@ -3,7 +3,7 @@ name = "product-finder-mcp"
 version = "0.1.0"
 description = "MCP server: manage products, run searches, query deals, modify this project"
 requires-python = ">=3.12"
-dependencies = ["mcp>=2", "product-finder-core", "product-finder-sites"]
+dependencies = ["mcp>=2", "product-finder-core", "product-finder-sites", "product-finder-backtest"]
 
 [project.scripts]
 product-finder-mcp = "product_finder_mcp.server:main"
@@ -14,6 +14,7 @@ dev = ["pytest>=8"]
 [tool.uv.sources]
 product-finder-core = { workspace = true }
 product-finder-sites = { workspace = true }
+product-finder-backtest = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0
+
+- Deal backtesting: new `packages/backtest` engine samples pivot dates
+  from the past year and evaluates the best deal found over 3d/1w/2w/
+  4w/8w/16w lookback windows, with paired bootstrap CIs, per-site win
+  rates, and plain-English verdicts; results stored in SQLite.
+- Price history: `price_history` table fed by every search
+  (`kind='seen'`), by `backfill_ebay_sold` (real sale dates,
+  `kind='sold'`), and by `add_price_observation`.
+- New MCP tools: `run_backtest`, `get_backtest`, `list_backtests`,
+  `backfill_ebay_sold`, `price_history_stats`, `add_price_observation`.
+- eBay sold-listings parsing (`sold_at` from "Sold <date>" captions).
+
 ## 0.1.0 — 2026-08-31
 
 - Generic product-finder: products are data (queries + regex
