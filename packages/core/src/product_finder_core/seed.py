@@ -34,11 +34,20 @@ LAPTOP = {
         "cpu": {"pattern": r"\b(i[57]-8[0-9]{3}u?)\b", "type": "str"},
         "carbon_gen": {"pattern": r"x1\s*carbon\s*(?:gen\s*|g)(\d+)", "type": "int"},
         "touch": {"pattern": r"\btouch(?:screen)?\b", "type": "bool"},
+        "has_specs": {
+            "pattern": (
+                r"i[3579]-\d|\bi[3579]\b|ryzen|\d+\s*gb|\bssd\b|nvme|fhd|wqhd|uhd|qhd"
+                r"|touch|laptop|ultrabook|notebook|\bgen\b|\bwin(?:dows)?\b|vpro"
+            ),
+            "type": "bool",
+        },
         "is_parts": {
             "pattern": (
                 r"for parts|parts only|as[- ]is|not working|no power|broken|cracked"
                 r"|(?:lcd|screen|display) (?:assembly|replacement)|lcd screen|screen display"
                 r"|display ass?embly|motherboard|mainboard|logic board|\bcase for\b"
+                r"|docking station|\bdock\b|multi[- ]?port|\bhub\b|adapter charger"
+                r"|charger adapter|\bsleeve\b|privacy filter|screen protector"
                 r"|palmrest|bezel|hinge|heatsink|cooling fan|bottom (?:case|cover)|top cover"
                 r"|(?:keyboard|battery|charger|adapter|fan|speaker|screen) for\b"
                 r"|replacement (?:screen|keyboard|battery)|digitizer|ac adapter|power adapter"
@@ -95,8 +104,18 @@ LAPTOP = {
             "note": "Gen 6+ (under 2.8 lbs)",
         },
         {
+            "field": "has_specs",
+            "op": "eq",
+            "reject": True,
+            "value": True,
+            "weight": 1,
+            "required": True,
+            "note": "title has laptop specs (CPU/RAM/screen/laptop), not an accessory name",
+        },
+        {
             "field": "is_parts",
             "op": "eq",
+            "reject": True,
             "value": False,
             "weight": 2,
             "required": True,

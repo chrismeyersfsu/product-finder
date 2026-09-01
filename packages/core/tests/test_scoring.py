@@ -51,3 +51,16 @@ def test_annotate_deals():
     assert out[0]["median_price"] == 200.0
     assert out[0]["pct_vs_median"] == -50.0
     assert "median_price" not in out[3]
+
+
+def test_reject_rules_discard_non_product():
+    attrs = scoring.extract_attrs(
+        "iTEKIRO 65W AC Adapter for Lenovo ThinkPad X1 Carbon", LAPTOP["extractors"]
+    )
+    assert scoring.rejected(attrs, LAPTOP["criteria"])
+    attrs = scoring.extract_attrs(
+        "Satechi Slim USB-C 6-in-1 Multi-Port Adapter (Black)", LAPTOP["extractors"]
+    )
+    assert scoring.rejected(attrs, LAPTOP["criteria"])
+    attrs = scoring.extract_attrs(TITLE, LAPTOP["extractors"])
+    assert scoring.rejected(attrs, LAPTOP["criteria"]) is None

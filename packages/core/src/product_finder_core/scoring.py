@@ -13,7 +13,9 @@ from groups 1 and 2 and normalizes to GB.
 
 Criteria rule (product.criteria), one dict per rule:
   {"field": name, "op": op, "value": v, "weight": 1.0,
-   "required": false, "note": ""}
+   "required": false, "reject": false, "note": ""}
+A violated required rule flags the listing (hard_fails); a violated
+reject rule means the row is not the product at all — see rejected().
 ops: gte, lte, eq, contains, one_of, matches, exists.
 Fields resolve from listing attrs first, then listing columns
 (price, seller_rating, seller_feedback_count, condition, ...).
@@ -66,6 +68,27 @@ def _passes(op: str, actual, expected) -> bool:
     if op == "matches":
         return re.search(str(expected), str(actual), re.IGNORECASE) is not None
     raise ValueError(f"unknown op: {op}")
+
+
+def rejected(merged: dict, criteria: list[dict]) -> str | None:
+    """Return the note of the first violated reject-rule, else None.
+
+    A rule with "reject": true marks listings that are not the product
+    at all (parts, accessories, wrong category). Callers discard such
+    rows at ingest instead of storing them flagged.
+    """
+    for rule in criteria:
+        if not rule.get("reject"):
+            continue
+        actual = merged.get(rule["field"])
+        if actual is None:
+            continue
+        try:
+            if not _passes(rule["op"], actual, rule.get("value")):
+                return rule.get("note") or rule["field"]
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def score_listing(merged: dict, criteria: list[dict]) -> tuple[float, list[str]]:

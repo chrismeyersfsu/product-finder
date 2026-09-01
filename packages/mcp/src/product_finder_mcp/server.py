@@ -146,9 +146,13 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
 
     result = run_mod.search_many(site_rows, queries)
     counts: dict[str, int] = {}
+    rejected = 0
     for li in result["listings"]:
         attrs = scoring.extract_attrs(li["title"], product["extractors"])
         merged = {**{k: v for k, v in li.items() if k not in ("attrs",)}, **attrs}
+        if scoring.rejected(merged, product["criteria"]):
+            rejected += 1
+            continue
         score, hard_fails = scoring.score_listing(merged, product["criteria"])
         storage.upsert_listing(
             conn,
@@ -173,7 +177,8 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
             )
         counts[li["site_slug"]] = counts.get(li["site_slug"], 0) + 1
     summary = {
-        "stored": len(result["listings"]),
+        "stored": len(result["listings"]) - rejected,
+        "rejected_non_product": rejected,
         "per_site": counts,
         "strategies": result["strategies"],
         "errors": result["errors"],
@@ -249,6 +254,11 @@ def backfill_ebay_sold(product_slug: str, query: str | None = None) -> dict:
             if not li.get("price") or not li.get("sold_at"):
                 skipped += 1
                 continue
+            if scoring.rejected(
+                scoring.extract_attrs(li["title"], product["extractors"]), product["criteria"]
+            ):
+                skipped += 1
+                continue
             score, hard_fails, _ = _score_for(product, li["title"])
             fresh = storage.append_observation(
                 conn,
@@ -283,6 +293,12 @@ def add_price_observation(
     product = storage.get_product(conn, product_slug)
     if not product:
         return {"error": f"no product: {product_slug}"}
+    if title:
+        note = scoring.rejected(
+            scoring.extract_attrs(title, product["extractors"]), product["criteria"]
+        )
+        if note:
+            return {"rejected": note}
     score, hard_fails, _ = _score_for(product, title) if title else (None, [], {})
     added = storage.append_observation(
         conn,

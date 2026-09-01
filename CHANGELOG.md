@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1
+
+- Criteria rules gained a `reject` flag: a violated reject rule discards
+  the row at ingest (never stored in listings or price_history) instead
+  of storing it flagged. The laptop seed marks parts/accessory and
+  spec-less-title rules as reject; existing junk rows are purged.
+
 ## 0.8.0
 
 - UI: sortable table headers on the deals table, history table view,
