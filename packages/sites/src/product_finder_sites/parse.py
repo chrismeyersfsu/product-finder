@@ -1,7 +1,8 @@
 """Pure parsers: search-page body -> listing dicts. No I/O ever.
 
-Owns HTML/JSON interpretation only; fetch.py owns the network,
-spec.py owns which selectors to use. Callers rely on:
+Owns HTML/JSON interpretation only — search pages and API response
+bodies alike; fetch.py/api.py own I/O, spec.py owns which selectors
+and strategies to use. Callers rely on:
 parse_listings() never raises on weird markup — it returns whatever it
 could parse — and every returned dict has a non-empty title and an
 absolute url; price/seller/sold_at fields are None when absent (a
@@ -110,9 +111,81 @@ def _parse_reddit_json(page_url: str, body: str) -> list[dict]:
     return out
 
 
-def parse_listings(site: dict, page_url: str, body: str) -> list[dict]:
-    if site["kind"] == "reddit_json":
+def _json_items(body: str, *path: str) -> list:
+    try:
+        node = json.loads(body)
+        for key in path:
+            node = node[key]
+        return node if isinstance(node, list) else []
+    except (ValueError, KeyError, TypeError):
+        return []
+
+
+def _parse_ebay_api(body: str) -> list[dict]:
+    out = []
+    for item in _json_items(body, "itemSummaries"):
+        title, url = item.get("title", ""), item.get("itemWebUrl")
+        if not title or not url:
+            continue
+        price = item.get("price", {}).get("value")
+        seller = item.get("seller", {})
+        rating = seller.get("feedbackPercentage")
+        out.append(
+            {
+                "title": title,
+                "price": float(price) if price else None,
+                "url": url,
+                "seller_rating": float(rating) if rating else None,
+                "seller_feedback_count": seller.get("feedbackScore"),
+            }
+        )
+    return out
+
+
+def _parse_bestbuy_api(body: str) -> list[dict]:
+    return [
+        {
+            "title": p["name"],
+            "price": p.get("salePrice"),
+            "url": p.get("url"),
+            "seller_rating": None,
+            "seller_feedback_count": None,
+        }
+        for p in _json_items(body, "products")
+        if p.get("name") and p.get("url")
+    ]
+
+
+def _parse_walmart_api(page_url: str, body: str) -> list[dict]:
+    out = []
+    for item in _json_items(body, "items"):
+        title, url = item.get("name", ""), item.get("productUrl")
+        if not title or not url:
+            continue
+        out.append(
+            {
+                "title": title,
+                "price": item.get("salePrice"),
+                "url": urljoin("https://www.walmart.com", url),
+                "seller_rating": None,
+                "seller_feedback_count": None,
+            }
+        )
+    return out
+
+
+def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
+    """Dispatch on strategy kind. `strategy` is a {kind, config} dict —
+    a flat single-strategy site works too (same shape)."""
+    kind = strategy["kind"]
+    if kind == "reddit_json":
         return _parse_reddit_json(page_url, body)
-    if site["kind"] == "css":
-        return _parse_css(site["config"], page_url, body)
-    raise ValueError(f"unknown site kind: {site['kind']}")
+    if kind in ("css", "browser_css"):
+        return _parse_css(strategy["config"], page_url, body)
+    if kind == "ebay_api":
+        return _parse_ebay_api(body)
+    if kind == "bestbuy_api":
+        return _parse_bestbuy_api(body)
+    if kind == "walmart_api":
+        return _parse_walmart_api(page_url, body)
+    raise ValueError(f"unknown strategy kind: {kind}")

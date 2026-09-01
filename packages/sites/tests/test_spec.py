@@ -1,20 +1,48 @@
-"""Registry contract: 21 sites, unique slugs, complete css configs."""
+"""Registry contract: 21 sites, unique slugs, ordered strategies, complete configs."""
 
-from product_finder_sites.spec import BUILTIN_SITES
+from product_finder_sites.spec import BUILTIN_SITES, JS_HEAVY
 
-
-def test_twenty_one_sites():
-    assert len(BUILTIN_SITES) == 21
+SITES = {s["slug"]: s for s in BUILTIN_SITES}
 
 
-def test_unique_slugs():
+def _strategies(site):
+    if site["kind"] == "tiered":
+        return site["config"]["strategies"]
+    return [{"kind": site["kind"], "config": site["config"]}]
+
+
+def test_twenty_one_sites_unique_slugs():
     slugs = [s["slug"] for s in BUILTIN_SITES]
-    assert len(slugs) == len(set(slugs))
+    assert len(slugs) == 21 and len(set(slugs)) == 21
 
 
 def test_css_configs_complete():
     for site in BUILTIN_SITES:
-        assert "{query}" in site["config"]["url"], site["slug"]
-        if site["kind"] == "css":
-            for key in ("item", "title", "link"):
-                assert site["config"].get(key), f"{site['slug']} missing {key}"
+        for strat in _strategies(site):
+            if strat["kind"] in ("css", "browser_css", "reddit_json"):
+                assert "{query}" in strat["config"]["url"], site["slug"]
+            if strat["kind"] in ("css", "browser_css"):
+                for key in ("item", "title", "link"):
+                    assert strat["config"].get(key), f"{site['slug']} missing {key}"
+
+
+def test_api_first_ordering():
+    for slug, api_kind in (
+        ("ebay", "ebay_api"),
+        ("bestbuy", "bestbuy_api"),
+        ("walmart", "walmart_api"),
+    ):
+        kinds = [s["kind"] for s in _strategies(SITES[slug])]
+        assert kinds[0] == api_kind, slug
+        assert "css" in kinds
+
+
+def test_js_heavy_sites_have_browser_fallback_last():
+    for slug in JS_HEAVY:
+        kinds = [s["kind"] for s in _strategies(SITES[slug])]
+        assert kinds[-1] == "browser_css", slug
+        assert kinds.index("css") < kinds.index("browser_css")
+
+
+def test_reddit_is_api_only():
+    assert SITES["reddit-hardwareswap"]["kind"] == "reddit_json"

@@ -26,5 +26,6 @@ def test_ebay_sold_not_in_builtin_roster():
 def test_regular_sites_get_no_sold_at_lookup():
     body = (FIXTURES / "ebay.html").read_text()
     ebay = next(s for s in BUILTIN_SITES if s["slug"] == "ebay")
-    out = parse.parse_listings(ebay, "https://www.ebay.com/sch/", body)
+    css = next(st for st in ebay["config"]["strategies"] if st["kind"] == "css")
+    out = parse.parse_listings(css, "https://www.ebay.com/sch/", body)
     assert all(li["sold_at"] is None for li in out)

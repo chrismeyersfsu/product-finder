@@ -1,0 +1,19 @@
+[project]
+name = "product-finder-browser"
+version = "0.1.0"
+description = "Browser-driven page fetching (Playwright/Chromium) wired into the sites fetch seam"
+requires-python = ">=3.12"
+dependencies = ["playwright>=1.40", "product-finder-sites"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv.sources]
+product-finder-sites = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/product_finder_browser"]

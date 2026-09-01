@@ -1,9 +1,17 @@
 services:
   product-finder:
-    build: .
+    build:
+      context: .
+      target: browser   # switch to `mcp` for the slim, no-Playwright image
     ports:
       - "8848:8848"
     volumes:
       - pf-data:/data
+    environment:
+      # Optional API-tier credentials; unset keys degrade to HTML/browser tiers.
+      - EBAY_CLIENT_ID
+      - EBAY_CLIENT_SECRET
+      - BESTBUY_API_KEY
+      - WALMART_API_KEY
 volumes:
   pf-data:

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0
+## 0.3.0 — 2026-08-31
 
 - Deal backtesting: new `packages/backtest` engine samples pivot dates
   from the past year and evaluates the best deal found over 3d/1w/2w/
@@ -12,6 +12,18 @@
 - New MCP tools: `run_backtest`, `get_backtest`, `list_backtests`,
   `backfill_ebay_sold`, `price_history_stats`, `add_price_observation`.
 - eBay sold-listings parsing (`sold_at` from "Sold <date>" captions).
+## 0.2.0 — 2026-08-31
+
+- Tiered fetching per site, tried best-first and recorded per run:
+  official API (eBay Browse, Best Buy, Walmart best-effort, Reddit
+  JSON; env-var credentials, graceful "<VAR> unset" degradation) ->
+  plain HTML -> Playwright browser for the nine JS-heavy sites.
+- New `packages/browser` (product-finder-browser): Chromium fetching
+  behind the sites seam; mcp extra `browser` enables it.
+- `run_search` now reports which strategy ran per site
+  (`strategies`), every failed attempt, and `browser_wired`.
+- Docker: two targets — slim `mcp` and browser-capable `browser`
+  (compose default) with Chromium installed.
 
 ## 0.1.0 — 2026-08-31
 

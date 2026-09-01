@@ -3,7 +3,9 @@
 Generic product-search engine: products are pure data (queries, regex
 extractors, weighted criteria) scored against listings scraped from 21
 marketplaces into SQLite, all driven over MCP (`packages/mcp`), with
-site adapters behind one HTTP seam (`packages/sites`) and the domain
+site adapters running tiered strategies — API, then HTML, then a
+Playwright browser (`packages/browser`) — behind one I/O seam
+(`packages/sites`) and the domain
 model in `packages/core`. Seeded with a thin-client laptop search.
 
 uv workspace monorepo; structure follows the patterns in

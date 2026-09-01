@@ -21,6 +21,14 @@ from product_finder_core import seed as seed_mod
 from product_finder_sites import run as run_mod
 from product_finder_sites.spec import BUILTIN_SITES, EBAY_SOLD
 
+try:  # optional browser tier: mcp extra "browser" (heavy Playwright deps)
+    from product_finder_browser import wire as _wire_browser
+
+    _wire_browser()
+    BROWSER_WIRED = True
+except ImportError:
+    BROWSER_WIRED = False
+
 app = MCPServer("product-finder")
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -163,7 +171,13 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
                 },
             )
         counts[li["site_slug"]] = counts.get(li["site_slug"], 0) + 1
-    summary = {"stored": len(result["listings"]), "per_site": counts, "errors": result["errors"]}
+    summary = {
+        "stored": len(result["listings"]),
+        "per_site": counts,
+        "strategies": result["strategies"],
+        "errors": result["errors"],
+        "browser_wired": BROWSER_WIRED,
+    }
     storage.record_search_run(conn, product_slug, summary)
     return summary
 

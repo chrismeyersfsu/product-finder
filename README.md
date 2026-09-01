@@ -44,6 +44,43 @@ claude mcp add --transport http product-finder http://localhost:8848/mcp
   `project_run_ci` — modify this project itself over MCP, scoped to
   the repo root
 
+## Fetching strategies
+
+Each site declares an ordered list of strategies, tried best-first;
+`run_search` reports which one actually ran per site (`strategies`)
+and why the others didn't (`errors`):
+
+1. **Official API** — `ebay_api` (Browse API, `EBAY_CLIENT_ID` +
+   `EBAY_CLIENT_SECRET`), `bestbuy_api` (`BESTBUY_API_KEY`),
+   `walmart_api` (`WALMART_API_KEY`, best-effort), and Reddit's public
+   JSON. Missing credentials degrade gracefully: the site records a
+   clear "<VAR> unset" error and falls to the next tier.
+2. **Plain HTML** (`css`) — one urllib seam, pure bs4 parsers.
+3. **Browser** (`browser_css`) — Playwright/Chromium renders the page,
+   same CSS selectors; the fallback tier for the JS-heavy sites
+   (amazon, walmart, target, bestbuy, backmarket, mercari, offerup,
+   shopgoodwill, govdeals). Lives in `packages/browser` so Playwright
+   never bloats plain installs; enable with the mcp `browser` extra
+   (`uv sync --package product-finder-mcp --extra browser`) — the
+   server wires it automatically when importable.
+
+An empty result page falls through to the next tier too (bot walls
+often answer 200 with no items).
+
+## Container layout
+
+The Dockerfile has two targets:
+
+- `mcp` — slim image: API + plain-HTML tiers only; browser_css tiers
+  degrade to per-site errors.
+- `browser` (compose default) — `mcp` plus Playwright and Chromium
+  (~600MB extra) so every tier runs.
+
+```sh
+docker build --target mcp -t product-finder:slim .
+docker compose up --build            # browser-capable
+```
+
 ## Defining a product
 
 A product is four pieces of data (see the worked example in
@@ -61,7 +98,9 @@ A product is four pieces of data (see the worked example in
 ## Packages
 
 - `packages/core` — data model, SQLite storage, scoring (no network)
-- `packages/sites` — 21 site adapters: one HTTP seam, pure parsers
+- `packages/sites` — 21 site adapters: tiered strategies, one I/O
+  seam (`_get`/`_post`/`_get_browser`), pure parsers
+- `packages/browser` — the Playwright tier, wired into the sites seam
 - `packages/mcp` — the MCP server and search pipeline glue
 
 ## Backtesting deals
@@ -104,11 +143,13 @@ Example, over MCP: `run_backtest("thin-client-laptop")`, later
 - Scraping selectors rot. The built-in specs are best-effort snapshots;
   when a site redesigns, update its row in the `sites` table (or
   `spec.py`) — no code changes needed for selector fixes.
-- JS-heavy / bot-blocking sites (amazon, walmart, target, bestbuy,
-  backmarket, mercari, offerup, shopgoodwill, govdeals) will often
-  return errors or empty results to a plain HTTP client. `run_search`
-  records this per site in its `errors` field and keeps going.
+- JS-heavy / bot-blocking sites can still block the browser tier;
+  every failed tier is recorded per site in `run_search`'s `errors`
+  field and the run keeps going.
+- `walmart_api` is best-effort: Walmart's production affiliate API
+  wants signed headers; a plain key header is sent and 401s surface as
+  per-site errors (the HTML/browser tiers then take over).
 - Craigslist searches one region; put your region's subdomain in its
   `config.url` (default is sfbay).
-- eBay is the only built-in that yields seller rating/feedback counts,
-  so seller-quality criteria only score there.
+- eBay is the only built-in that yields seller rating/feedback counts
+  (via API or HTML), so seller-quality criteria only score there.

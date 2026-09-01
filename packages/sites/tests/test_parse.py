@@ -9,10 +9,17 @@ FIXTURES = Path(__file__).parent / "fixtures"
 SITES = {s["slug"]: s for s in BUILTIN_SITES}
 
 
+def _strategy(slug, kind):
+    site = SITES[slug]
+    if site["kind"] != "tiered":
+        return site
+    return next(s for s in site["config"]["strategies"] if s["kind"] == kind)
+
+
 def test_parse_ebay_fixture():
     body = (FIXTURES / "ebay.html").read_text()
     url = "https://www.ebay.com/sch/i.html?_nkw=x"
-    listings = parse.parse_listings(SITES["ebay"], url, body)
+    listings = parse.parse_listings(_strategy("ebay", "css"), url, body)
     assert len(listings) == 2  # placeholder "Shop on eBay" row skipped
     first = listings[0]
     assert first["title"].startswith("Lenovo ThinkPad X1 Carbon Gen 6")
@@ -34,7 +41,7 @@ def test_parse_reddit_fixture():
 
 
 def test_parse_garbage_html_returns_empty():
-    assert parse.parse_listings(SITES["ebay"], "https://x", "<html>nothing</html>") == []
+    assert parse.parse_listings(_strategy("ebay", "css"), "https://x", "<html>nothing</html>") == []
 
 
 def test_price_helper():
@@ -42,3 +49,31 @@ def test_price_helper():
     assert parse._price("US $89") == 89.0
     assert parse._price(None) is None
     assert parse._price("free") is None
+
+
+def test_parse_ebay_api_fixture():
+    body = (FIXTURES / "ebay_api.json").read_text()
+    listings = parse.parse_listings(
+        {"kind": "ebay_api", "config": {}}, "https://api.ebay.com", body
+    )
+    assert len(listings) == 2  # item without url skipped
+    assert listings[0]["price"] == 289.99
+    assert listings[0]["seller_rating"] == 99.1
+    assert listings[0]["seller_feedback_count"] == 2394
+    assert listings[1]["seller_rating"] is None
+
+
+def test_parse_bestbuy_api_fixture():
+    body = (FIXTURES / "bestbuy_api.json").read_text()
+    listings = parse.parse_listings({"kind": "bestbuy_api", "config": {}}, "https://x", body)
+    assert len(listings) == 1
+    assert listings[0]["price"] == 599.99
+
+
+def test_parse_browser_css_uses_css_selectors():
+    body = (FIXTURES / "ebay.html").read_text()
+    css = _strategy("ebay", "css")
+    listings = parse.parse_listings(
+        {"kind": "browser_css", "config": css["config"]}, "https://www.ebay.com/sch", body
+    )
+    assert len(listings) == 2

@@ -1,18 +1,23 @@
 """Built-in site registry: 21 marketplaces as pure data.
 
 Owns the default site specs — nothing else. A site is
-{slug, name, kind, config}; kind "css" config holds a search `url`
-with a {query} placeholder plus CSS selectors (item/title/price/link,
-optional link_attr and seller), kind "reddit_json" holds just `url`.
+{slug, name, kind, config}. kind "tiered" holds an ordered
+config["strategies"] list of {kind, config} tried best-first:
+official API (ebay_api/bestbuy_api/walmart_api/reddit_json, keyed by
+env vars — see api.py), then plain-HTML "css", then "browser_css"
+(same selectors, page fetched by a real browser) for JS-heavy sites.
+A flat kind ("css", "reddit_json") is a single-strategy site. css/
+browser_css config: a search `url` with a {query} placeholder plus
+CSS selectors (item/title/price/link, optional link_attr and seller).
 Never fetches, parses, or stores; callers copy these into the sites
 table and may override any config there.
 
 Selectors are best-effort snapshots of each site's public search page
 and will rot as sites redesign. JS-heavy or bot-blocking sites
 (amazon, walmart, target, bestbuy, backmarket, mercari, offerup,
-shopgoodwill, govdeals) often return errors or empty results to plain
-HTTP clients; run.search_site records that per site instead of failing
-the run. Craigslist needs a region subdomain in its url.
+shopgoodwill, govdeals) get a browser_css fallback tier; without API
+keys or a wired browser those tiers degrade to per-site errors.
+Craigslist needs a region subdomain in its url.
 """
 
 
@@ -49,7 +54,7 @@ EBAY_SOLD = {
     },
 }
 
-BUILTIN_SITES = [
+_FLAT_SITES = [
     _css(
         "ebay",
         "eBay",
@@ -242,3 +247,42 @@ BUILTIN_SITES = [
         },
     },
 ]
+
+
+# Sites whose search pages are JS-rendered or bot-block plain HTTP:
+# they get a browser_css fallback tier after plain css.
+JS_HEAVY = {
+    "amazon",
+    "walmart",
+    "target",
+    "bestbuy",
+    "backmarket",
+    "mercari",
+    "offerup",
+    "shopgoodwill",
+    "govdeals",
+}
+
+# API-first tiers, prepended where an official API exists.
+_API_FIRST = {"ebay": "ebay_api", "bestbuy": "bestbuy_api", "walmart": "walmart_api"}
+
+
+def _tiered(site: dict) -> dict:
+    """Wrap a flat css site in ordered strategies: api? -> css -> browser?"""
+    strategies = []
+    if site["slug"] in _API_FIRST:
+        strategies.append({"kind": _API_FIRST[site["slug"]], "config": {}})
+    strategies.append({"kind": "css", "config": site["config"]})
+    if site["slug"] in JS_HEAVY:
+        strategies.append({"kind": "browser_css", "config": site["config"]})
+    if len(strategies) == 1:
+        return site  # plain css stays flat
+    return {
+        "slug": site["slug"],
+        "name": site["name"],
+        "kind": "tiered",
+        "config": {"strategies": strategies},
+    }
+
+
+BUILTIN_SITES = [_tiered(s) if s["kind"] == "css" else s for s in _FLAT_SITES]

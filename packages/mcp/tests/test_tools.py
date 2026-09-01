@@ -15,6 +15,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 @pytest.fixture(autouse=True)
 def tmp_db(tmp_path, monkeypatch):
     monkeypatch.setenv("PF_DB", str(tmp_path / "t.db"))
+    for var in ("EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET", "BESTBUY_API_KEY", "WALMART_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
 
 
 def test_seed_and_product_crud():
@@ -50,6 +52,7 @@ def test_run_search_scores_and_stores(monkeypatch):
     )
     summary = server.run_search("thin-client-laptop", sites=["ebay"], query="x1 carbon")
     assert summary["stored"] == 2 and summary["per_site"] == {"ebay": 2}
+    assert summary["strategies"] == {"ebay": "css"}  # api tier skipped: creds unset
 
     rows = server.query_listings("thin-client-laptop")
     assert rows and rows[0]["score"] > 0.8
@@ -68,8 +71,13 @@ def test_run_search_records_site_errors(monkeypatch):
         raise fetch.FetchError("HTTP 403")
 
     monkeypatch.setattr(fetch, "_get", fail)
+    monkeypatch.setattr(
+        fetch, "_get_browser", lambda url, wait=None, timeout=30.0: fetch._browser_unwired(url)
+    )
     summary = server.run_search("thin-client-laptop", sites=["amazon"])
-    assert summary["stored"] == 0 and summary["errors"] == {"amazon": "HTTP 403"}
+    assert summary["stored"] == 0
+    assert "css: HTTP 403" in summary["errors"]["amazon"]
+    assert "browser_css:" in summary["errors"]["amazon"]
 
 
 def test_run_search_missing_product():

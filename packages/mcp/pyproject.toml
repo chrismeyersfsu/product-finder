@@ -5,6 +5,9 @@ description = "MCP server: manage products, run searches, query deals, modify th
 requires-python = ">=3.12"
 dependencies = ["mcp>=2", "product-finder-core", "product-finder-sites", "product-finder-backtest"]
 
+[project.optional-dependencies]
+browser = ["product-finder-browser"]
+
 [project.scripts]
 product-finder-mcp = "product_finder_mcp.server:main"
 
@@ -15,6 +18,7 @@ dev = ["pytest>=8"]
 product-finder-core = { workspace = true }
 product-finder-sites = { workspace = true }
 product-finder-backtest = { workspace = true }
+product-finder-browser = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
