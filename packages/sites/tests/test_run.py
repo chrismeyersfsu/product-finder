@@ -67,8 +67,8 @@ def test_all_tiers_fail_error_is_a_value(monkeypatch):
     monkeypatch.setattr(fetch, "_get", fail)
     result = run.search_site(SITES["ebay"], "x")
     assert result["strategy"] is None and result["listings"] == []
-    assert "ebay_api: EBAY_CLIENT_ID/EBAY_CLIENT_SECRET unset" in result["error"]
-    assert "browser_css: browser fetching not wired" in result["error"]
+    assert "api: EBAY_CLIENT_ID/EBAY_CLIENT_SECRET unset" in result["error"]
+    assert "browser: browser fetching not wired" in result["error"]
 
 
 def test_empty_page_falls_through_to_browser(monkeypatch):
@@ -95,7 +95,7 @@ def test_unwired_browser_degrades_to_error(monkeypatch):
     )
     result = run.search_site(SITES["target"], "x")
     assert result["strategy"] is None
-    assert "browser_css: browser fetching not wired" in result["error"]
+    assert "browser: browser fetching not wired" in result["error"]
 
 
 def test_search_many_dedupes_and_reports_strategies(monkeypatch):
@@ -138,3 +138,77 @@ def test_facebook_cookies_env_reaches_browser_seam(monkeypatch):
     assert seen["cookies"] == "c_user=1; xs=abc"
     assert "/marketplace/durham/search" in seen["url"] and "radius=80" in seen["url"]
     assert len(result["listings"]) == 3
+
+
+def test_local_filter_drops_unrelated_feed_items(monkeypatch):
+    woot = SITES["woot"]
+    monkeypatch.setattr(
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0, cookies=None: (FIXTURES / "woot.html").read_text(),
+    )
+    result = run.search_site(woot, "ThinkPad X1 Carbon Gen 6")
+    assert result["error"] is None and result["strategy"] == "browser_css"
+    assert [li["title"] for li in result["listings"]] == [
+        "$ 349 99 Lenovo ThinkPad X1 Carbon G8 16GB Refurb"
+    ]
+    result = run.search_site(woot, "espresso machine")
+    assert result["error"] == "browser: 0 of 3 feed items match query"
+
+
+def test_challenge_page_labeled(monkeypatch):
+    monkeypatch.setattr(
+        fetch,
+        "_get",
+        lambda url, headers=None, timeout=25.0: "<html><title>Robot or human?</title></html>",
+    )
+    monkeypatch.setattr(
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0, cookies=None: "<html>Just a moment...</html>",
+    )
+    result = run.search_site(SITES["target"], "x")
+    assert result["error"] == "css: challenge page; browser: challenge page"
+
+
+def test_goodwill_api_tier_is_keyless(monkeypatch):
+    posted = {}
+
+    def fake_post(url, data, headers=None, timeout=25.0):
+        posted["url"] = url
+        posted["data"] = data
+        return (FIXTURES / "goodwill_api.json").read_text()
+
+    monkeypatch.setattr(fetch, "_post", fake_post)
+    result = run.search_site(SITES["shopgoodwill"], "x1 carbon")
+    assert result["strategy"] == "goodwill_api"
+    assert len(result["listings"]) == 2
+    assert "x1 carbon" in posted["data"]
+    assert posted["url"].startswith("https://buyerapi.shopgoodwill.com")
+
+
+def test_search_many_keeps_error_only_without_any_success(monkeypatch):
+    calls = {"n": 0}
+
+    def flaky(url, headers=None, timeout=25.0):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise fetch.FetchError("HTTP 403")
+        return (FIXTURES / "ebay.html").read_text()
+
+    monkeypatch.setattr(fetch, "_get", flaky)
+    site = {
+        "slug": "newegg2",
+        "name": "n",
+        "kind": "css",
+        "config": SITES["newegg"]["config"]
+        | {
+            "item": "li.s-item",
+            "title": ".s-item__title",
+            "price": ".s-item__price",
+            "link": "a.s-item__link",
+        },
+    }
+    out = run.search_many([site], ["q1", "q2"])
+    assert out["errors"] == {}  # q2 succeeded; q1's 403 is not reported
+    assert out["strategies"] == {"newegg2": "css"}

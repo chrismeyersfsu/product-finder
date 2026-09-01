@@ -81,7 +81,7 @@ def test_run_search_records_site_errors(monkeypatch):
     summary = server.run_search("thin-client-laptop", sites=["amazon"])
     assert summary["stored"] == 0
     assert "css: HTTP 403" in summary["errors"]["amazon"]
-    assert "browser_css:" in summary["errors"]["amazon"]
+    assert "browser:" in summary["errors"]["amazon"]
 
 
 def test_run_search_missing_product():

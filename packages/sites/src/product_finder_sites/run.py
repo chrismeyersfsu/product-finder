@@ -5,19 +5,49 @@ construction, and error containment around fetch/api + parse. Never
 stores or scores (callers do that with packages/core). Callers rely
 on: search_site() returns errors as values, never raises, reports
 which strategy actually ran ("strategy") and every attempt
-("attempts"), and an empty page falls through to the next strategy —
-bot walls often 200 with no items. search_many() dedupes listings by
-url across queries.
+("attempts"); the joined error string labels every tier compactly
+(api/css/browser/json) and calls a 200-with-no-items wall a
+"challenge page". An empty page falls through to the next strategy.
+Category-feed configs (local_filter) drop rows not matching the
+query. search_many() dedupes listings by url across queries and keeps
+a site's error only if no query ever succeeded there.
 """
 
 import os
+import re
 import urllib.parse
 
 from . import api, fetch, parse
 
+# Compact tier labels for the per-site error string ("api: KEY unset;
+# css: HTTP 403; browser: challenge page") shown verbatim by /sites.
+_TIER_LABEL = {"css": "css", "reddit_json": "json"}
+
+# Wall/challenge pages that answer 200 with no items.
+_CHALLENGE_RE = re.compile(
+    r"captcha|robot or human|just a moment|security measure|access denied"
+    r"|pardon our interruption|are you a human|verify you are"
+    r"|sorry! something went wrong",  # amazon's bot wall
+    re.IGNORECASE,
+)
+
 # Strategy kinds fetched by the browser seam (config may carry a
 # cookies_env naming an env var whose cookie header logs the page in).
 BROWSER_KINDS = {"browser_css", "facebook_marketplace"}
+
+
+def _label(kind: str) -> str:
+    if kind in _TIER_LABEL:
+        return _TIER_LABEL[kind]
+    return "api" if kind.endswith("_api") else "browser"
+
+
+def _local_filter(listings: list[dict], query: str) -> list[dict]:
+    """Keep listings whose title carries a distinctive query token — for
+    category-feed sites (woot) that can't search server-side."""
+    tokens = [w for w in re.findall(r"\w+", query.lower()) if len(w) >= 6]
+    tokens = tokens or [w for w in re.findall(r"\w+", query.lower())]
+    return [li for li in listings if any(t in li["title"].lower() for t in tokens)]
 
 
 def _strategies(site: dict) -> list[dict]:
@@ -38,7 +68,7 @@ def _fetch(strategy: dict, query: str) -> tuple[str, str]:
     if kind in BROWSER_KINDS:
         cookies = os.environ.get(config["cookies_env"]) if config.get("cookies_env") else None
         return fetch._get_browser(url, config.get("wait"), cookies=cookies), url
-    return fetch._get(url), url
+    return fetch._get(url, headers=config.get("headers")), url
 
 
 def search_site(site: dict, query: str) -> dict:
@@ -57,8 +87,17 @@ def search_site(site: dict, query: str) -> dict:
         except Exception as e:  # a bad parse must not kill the run
             attempts.append({"strategy": kind, "error": f"parse: {e}"})
             continue
+        if listings and strategy["config"].get("local_filter"):
+            parsed = len(listings)
+            listings = _local_filter(listings, query)
+            if not listings:
+                attempts.append(
+                    {"strategy": kind, "error": f"0 of {parsed} feed items match query"}
+                )
+                continue
         if not listings:
-            attempts.append({"strategy": kind, "error": "no items parsed"})
+            reason = "challenge page" if _CHALLENGE_RE.search(body[:200_000]) else "no items parsed"
+            attempts.append({"strategy": kind, "error": reason})
             continue
         for li in listings:
             li["site_slug"] = site["slug"]
@@ -69,7 +108,7 @@ def search_site(site: dict, query: str) -> dict:
             "attempts": attempts,
             "error": None,
         }
-    error = "; ".join(f"{a['strategy']}: {a['error']}" for a in attempts) or "no strategies"
+    error = "; ".join(f"{_label(a['strategy'])}: {a['error']}" for a in attempts) or "no strategies"
     return {
         "site": site["slug"],
         "listings": [],
@@ -90,9 +129,11 @@ def search_many(sites: list[dict], queries: list[str]) -> dict:
         for query in queries:
             result = search_site(site, query)
             if result["error"]:
-                errors[site["slug"]] = result["error"]
+                if site["slug"] not in strategies:  # never overwrite a success
+                    errors[site["slug"]] = result["error"]
                 continue
             strategies[site["slug"]] = result["strategy"]
+            errors.pop(site["slug"], None)
             for li in result["listings"]:
                 seen.setdefault(li["url"], li)
     return {"listings": list(seen.values()), "errors": errors, "strategies": strategies}

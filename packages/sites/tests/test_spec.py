@@ -1,6 +1,6 @@
 """Registry contract: 22 sites, unique slugs, ordered strategies, complete configs."""
 
-from product_finder_sites.spec import BUILTIN_SITES, JS_HEAVY
+from product_finder_sites.spec import BUILTIN_SITES, JS_HEAVY, NO_PLAIN_HTML
 
 SITES = {s["slug"]: s for s in BUILTIN_SITES}
 
@@ -29,7 +29,9 @@ def test_css_configs_complete():
     for site in BUILTIN_SITES:
         for strat in _strategies(site):
             if strat["kind"] in ("css", "browser_css", "reddit_json"):
-                assert "{query}" in strat["config"]["url"], site["slug"]
+                # category feeds (local_filter) have a fixed url instead
+                if not strat["config"].get("local_filter"):
+                    assert "{query}" in strat["config"]["url"], site["slug"]
             if strat["kind"] in ("css", "browser_css"):
                 for key in ("item", "title", "link"):
                     assert strat["config"].get(key), f"{site['slug']} missing {key}"
@@ -54,7 +56,8 @@ def test_js_heavy_sites_have_browser_fallback_last():
     for slug in JS_HEAVY:
         kinds = [s["kind"] for s in _strategies(SITES[slug])]
         assert kinds[-1] == "browser_css", slug
-        assert kinds.index("css") < kinds.index("browser_css")
+        if slug not in NO_PLAIN_HTML:
+            assert kinds.index("css") < kinds.index("browser_css")
 
 
 def test_reddit_is_api_only():

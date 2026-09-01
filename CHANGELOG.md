@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.1 — 2026-09-01
+
+- Scraper repair from live pages: Office Depot (new /a/search URL +
+  od-product-card selectors), Swappa (cell_product), Target (browser
+  tier, aria-label titles), Best Buy (browser tier,
+  product-list-item), Back Market (card-attribute titles/prices),
+  Woot (search is gone — computers-feed scrape + local keyword
+  filter), ShopGoodwill (new keyless goodwill_api buyer-API tier).
+- Selector configs learned attribute sources (title_attr/price_attr),
+  "&" self-selectors, per-site headers, split "$ 27 99" prices, and
+  browser waits; the browser driver scroll-nudges lazy grids.
+- Per-site errors now label every tier compactly (api/css/browser/
+  json), call bot walls "challenge page", and a site that succeeded
+  for any query no longer reports a stale error.
+- Still walled from this network: amazon, adorama, microcenter,
+  mercari, backmarket (intermittent), offerup (geo-empty), govdeals,
+  staples, reddit, and ebay/walmart without API keys.
+
 ## 0.8.2
 
 - Laptop seed: under-16GB RAM listings are now rejected at ingest, not

@@ -13,11 +13,20 @@ Never fetches, parses, or stores; callers copy these into the sites
 table and may override any config there.
 
 Selectors are best-effort snapshots of each site's public search page
-and will rot as sites redesign. JS-heavy or bot-blocking sites
-(amazon, walmart, target, bestbuy, backmarket, mercari, offerup,
-shopgoodwill, govdeals) get a browser_css fallback tier; without API
-keys or a wired browser those tiers degrade to per-site errors.
-Craigslist needs a region subdomain in its url.
+and will rot as sites redesign; the css/browser_css sets below were
+re-derived from live pages on 2026-09-01. JS-heavy or bot-blocking
+sites get a browser_css fallback tier; without API keys or a wired
+browser those tiers degrade to per-site errors. Live status from this
+network as of 2026-09-01: target/bestbuy work on the browser tier,
+officedepot/swappa on plain css, shopgoodwill on its keyless buyer
+API (goodwill_api), woot parses its computers feed with a local
+keyword filter (feed rarely carries a given product). Still walled
+regardless of tier: ebay/walmart (API tiers exist — add keys),
+amazon, adorama, microcenter, mercari, backmarket (selectors are
+live-verified but its wall is intermittent), offerup (geo-locates
+anonymous searches by IP and returns nothing), govdeals, staples
+(resets even real-browser connections), reddit (403s datacenter IPs
+on .json). Craigslist needs a region subdomain in its url.
 
 facebook-marketplace is browser-only (kind "facebook_marketplace":
 fully JS-rendered, no public API, usually login-walled) with its own
@@ -29,7 +38,7 @@ the browser context for a logged-in search.
 """
 
 
-def _css(slug, name, url, item, title, price, link, link_attr="href", seller=None):
+def _css(slug, name, url, item, title, price, link, link_attr="href", seller=None, **extra):
     config = {
         "url": url,
         "item": item,
@@ -37,6 +46,7 @@ def _css(slug, name, url, item, title, price, link, link_attr="href", seller=Non
         "price": price,
         "link": link,
         "link_attr": link_attr,
+        **extra,
     }
     if seller:
         config["seller"] = seller
@@ -105,10 +115,11 @@ _FLAT_SITES = [
         "bestbuy",
         "Best Buy",
         "https://www.bestbuy.com/site/searchpage.jsp?st={query}",
-        "li.sku-item",
-        "h4.sku-title a",
-        "div.priceView-customer-price > span",
-        "h4.sku-title a",
+        "div.product-list-item",
+        "a.product-list-item-link",
+        "div.price-block-customer-price",
+        "a.product-list-item-link",
+        wait="div.product-list-item",
     ),
     _css(
         "walmart",
@@ -123,11 +134,15 @@ _FLAT_SITES = [
         "target",
         "Target",
         "https://www.target.com/s?searchTerm={query}",
-        "div[data-test='@web/site-top-of-funnel/ProductCardWrapper']",
-        "a[data-test='product-title']",
-        "span[data-test='current-price']",
-        "a[data-test='product-title']",
+        "[data-test='ListingPageProductListing']",
+        "a[href*='/p/'][aria-label]",
+        "a[href*='/p/'][aria-label]",
+        "a[href*='/p/'][aria-label]",
+        title_attr="aria-label",
+        wait="[data-test='ListingPageProductListing']",
     ),
+    # Staples resets plain HTTP *and* real-browser connections from
+    # datacenter IPs (ERR_HTTP2_PROTOCOL_ERROR); selectors unverifiable.
     _css(
         "staples",
         "Staples",
@@ -140,11 +155,11 @@ _FLAT_SITES = [
     _css(
         "officedepot",
         "Office Depot",
-        "https://www.officedepot.com/catalog/search.do?Ntt={query}",
-        "div.od-search-browse-products-item",
-        "a.od-product-card-region-description",
-        "span.od-graphql-price-big-price",
-        "a.od-product-card-region-description",
+        "https://www.officedepot.com/a/search/?q={query}",
+        "div.od-product-card",
+        "a.od-product-card-description",
+        "div.od-graphql-price",
+        "a.od-product-card-description",
     ),
     _css(
         "adorama",
@@ -178,18 +193,21 @@ _FLAT_SITES = [
         "Back Market",
         "https://www.backmarket.com/en-us/search?q={query}",
         "div[data-qa='productCard']",
-        "h2",
-        "div[data-qa='productCardPrice']",
-        "a",
+        "&",
+        "&",
+        "a[href*='/p/']",
+        title_attr="data-cnstrc-item-name",
+        price_attr="data-cnstrc-item-price",
+        wait="div[data-qa='productCard']",
     ),
     _css(
         "swappa",
         "Swappa",
         "https://swappa.com/search?q={query}",
-        "div.listing_row",
-        "a.listing_title",
-        "span.listing_price",
-        "a.listing_title",
+        "div.cell_product",
+        "a.title",
+        "a.price",
+        "a.title",
     ),
     _css(
         "mercari",
@@ -219,14 +237,18 @@ _FLAT_SITES = [
         "div.item_price",
         "div.item_title a",
     ),
+    # Woot removed site search; scrape the computers category feed and
+    # keyword-filter locally. Card anchors mix price into the title text.
     _css(
         "woot",
-        "Woot",
-        "https://www.woot.com/search?q={query}",
-        "div.v2-offer",
-        "div.v2-offer-title",
-        "span.v2-offer-price",
-        "a.v2-offer-link",
+        "Woot (computers feed)",
+        "https://www.woot.com/category/computers",
+        "a[href*='/offers/']",
+        "&",
+        "&",
+        "&",
+        local_filter=True,
+        wait="a[href*='/offers/']",
     ),
     _css(
         "shopgoodwill",
@@ -264,7 +286,10 @@ _FLAT_SITES = [
         "kind": "reddit_json",
         "config": {
             "url": "https://www.reddit.com/r/hardwareswap/search.json"
-            "?q={query}&restrict_sr=on&sort=new&limit=50"
+            "?q={query}&restrict_sr=on&sort=new&limit=50",
+            # Reddit's API rules want a descriptive UA (they block the
+            # browser UA harder); this IP range may still get 403s.
+            "headers": {"User-Agent": "linux:product-finder:v0.4 (personal price tracker)"},
         },
     },
 ]
@@ -272,11 +297,15 @@ _FLAT_SITES = [
 
 # Sites that hard-block plain HTTP entirely (eBay 403s /sch/i.html even
 # with a browser UA): no css tier at all — API first, then browser.
-NO_PLAIN_HTML = {"ebay"}
+NO_PLAIN_HTML = {"ebay", "woot"}
 
 # Sites whose search pages are JS-rendered or bot-block plain HTTP:
 # they get a browser_css fallback tier after plain css.
 JS_HEAVY = {
+    "woot",
+    "staples",
+    "adorama",
+    "microcenter",
     "amazon",
     "walmart",
     "target",
@@ -289,7 +318,12 @@ JS_HEAVY = {
 }
 
 # API-first tiers, prepended where an official API exists.
-_API_FIRST = {"ebay": "ebay_api", "bestbuy": "bestbuy_api", "walmart": "walmart_api"}
+_API_FIRST = {
+    "ebay": "ebay_api",
+    "bestbuy": "bestbuy_api",
+    "walmart": "walmart_api",
+    "shopgoodwill": "goodwill_api",  # keyless public buyer API
+}
 
 
 def _tiered(site: dict) -> dict:
@@ -301,7 +335,7 @@ def _tiered(site: dict) -> dict:
         strategies.append({"kind": "css", "config": site["config"]})
     if site["slug"] in JS_HEAVY | NO_PLAIN_HTML:
         strategies.append({"kind": "browser_css", "config": site["config"]})
-    if len(strategies) == 1:
+    if len(strategies) == 1 and strategies[0]["kind"] == site["kind"]:
         return site  # plain css stays flat
     return {
         "slug": site["slug"],

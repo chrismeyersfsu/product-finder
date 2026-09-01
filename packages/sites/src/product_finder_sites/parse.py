@@ -21,6 +21,8 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 _PRICE_RE = re.compile(r"\$\s*([\d,]+(?:\.\d{1,2})?)")
+# Woot-style split price markup: "$ 27 99" meaning $27.99
+_PRICE_SPLIT_RE = re.compile(r"\$\s*(\d{1,4})\s+(\d{2})(?!\d)")
 _NUM_RE = re.compile(r"([\d,]+(?:\.\d{1,2})?)")
 # eBay-style "seller_name (2,394) 99.1%"
 _SELLER_RE = re.compile(r"\(([\d,]+)\)\s*([\d.]+)%")
@@ -37,8 +39,16 @@ class LoginWall(Exception):
 def _price(text: str | None) -> float | None:
     if not text:
         return None
+    split = _PRICE_SPLIT_RE.search(text)
     m = _PRICE_RE.search(text) or _NUM_RE.search(text)
+    if split and (not m or split.start() <= m.start()):
+        return float(f"{split.group(1)}.{split.group(2)}")
     return float(m.group(1).replace(",", "")) if m else None
+
+
+def _sel(item, selector: str):
+    """Resolve a config selector against a card node; "&" is the node itself."""
+    return item if selector == "&" else item.select_one(selector)
 
 
 def _sold_date(text: str | None) -> str | None:
@@ -67,13 +77,20 @@ def _parse_css(config: dict, page_url: str, body: str) -> list[dict]:
     soup = BeautifulSoup(body, "html.parser")
     out = []
     for item in soup.select(config["item"]):
-        title_node = item.select_one(config["title"])
-        link_node = item.select_one(config["link"])
-        title = title_node.get_text(" ", strip=True) if title_node else ""
+        title_node = _sel(item, config["title"])
+        link_node = _sel(item, config["link"])
+        if title_node is not None and config.get("title_attr"):
+            title = str(title_node.get(config["title_attr"]) or "").strip()
+        else:
+            title = title_node.get_text(" ", strip=True) if title_node else ""
         href = link_node.get(config.get("link_attr", "href")) if link_node else None
         if not title or not href or title.lower() == "shop on ebay":
             continue
-        price_node = item.select_one(config["price"]) if config.get("price") else None
+        price_node = _sel(item, config["price"]) if config.get("price") else None
+        if price_node is not None and config.get("price_attr"):
+            price_node_text = str(price_node.get(config["price_attr"]) or "")
+        else:
+            price_node_text = price_node.get_text(" ", strip=True) if price_node else None
         rating = count = None
         if config.get("seller"):
             seller_node = item.select_one(config["seller"])
@@ -85,7 +102,7 @@ def _parse_css(config: dict, page_url: str, body: str) -> list[dict]:
         out.append(
             {
                 "title": title,
-                "price": _price(price_node.get_text(" ", strip=True) if price_node else None),
+                "price": _price(price_node_text),
                 "url": urljoin(page_url, str(href)),
                 "seller_rating": rating,
                 "seller_feedback_count": count,
@@ -226,6 +243,27 @@ def _parse_facebook(page_url: str, body: str) -> list[dict]:
     return out
 
 
+def _parse_goodwill_api(body: str) -> list[dict]:
+    out = []
+    for item in _json_items(body, "searchResults", "items"):
+        title, item_id = item.get("title", ""), item.get("itemId")
+        if not title or not item_id:
+            continue
+        price = (
+            item.get("currentPrice") or item.get("discountedBuyNowPrice") or item.get("buyNowPrice")
+        )
+        out.append(
+            {
+                "title": title,
+                "price": float(price) if price else None,
+                "url": f"https://shopgoodwill.com/item/{item_id}",
+                "seller_rating": None,
+                "seller_feedback_count": None,
+            }
+        )
+    return out
+
+
 def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
     """Dispatch on strategy kind. `strategy` is a {kind, config} dict —
     a flat single-strategy site works too (same shape)."""
@@ -242,4 +280,6 @@ def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
         return _parse_bestbuy_api(body)
     if kind == "walmart_api":
         return _parse_walmart_api(page_url, body)
+    if kind == "goodwill_api":
+        return _parse_goodwill_api(body)
     raise ValueError(f"unknown strategy kind: {kind}")

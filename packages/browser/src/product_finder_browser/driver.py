@@ -1,6 +1,6 @@
 """Chromium page fetching behind the sites fetch seam.
 
-Owns browser lifecycle (launch, navigate, wait, teardown), cookie
+Owns browser lifecycle (launch, navigate, scroll-nudge, wait, teardown), cookie
 injection, and error normalization to FetchError. Never parses HTML
 and never selects sites. Callers rely on: get_page(url, wait_selector,
 timeout, cookies) returns the rendered page's HTML; wait_selector is
@@ -42,6 +42,11 @@ def _render(url: str, wait_selector: str | None, timeout: float, cookies: str | 
                 context.add_cookies(_parse_cookie_header(cookies, "." + host.removeprefix("www.")))
             page = context.new_page()
             page.goto(url, timeout=timeout * 1000, wait_until="domcontentloaded")
+            try:  # nudge lazy-loading result grids into hydrating
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+                page.wait_for_timeout(1500)
+            except Exception:
+                pass
             if wait_selector:
                 try:
                     page.wait_for_selector(wait_selector, timeout=10_000)
@@ -53,7 +58,7 @@ def _render(url: str, wait_selector: str | None, timeout: float, cookies: str | 
 
 
 def get_page(
-    url: str, wait_selector: str | None = None, timeout: float = 30.0, cookies: str | None = None
+    url: str, wait_selector: str | None = None, timeout: float = 45.0, cookies: str | None = None
 ) -> str:
     try:
         return _render(url, wait_selector, timeout, cookies)
