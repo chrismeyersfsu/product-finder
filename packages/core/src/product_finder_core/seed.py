@@ -15,7 +15,12 @@ LAPTOP = {
         "Light, big-screen laptop with good battery and keyboard for RDP work; "
         "low local specs are fine."
     ),
-    "queries": ["ThinkPad X1 Carbon Gen 6", "ThinkPad X1 Carbon Gen 7", "Lenovo X1 Carbon i5 16GB"],
+    "queries": [
+        "ThinkPad X1 Carbon Gen 6",
+        "ThinkPad X1 Carbon Gen 7",
+        "Lenovo X1 Carbon i5 16GB",
+        "ThinkPad X1 Carbon",
+    ],
     "extractors": {
         "ram_gb": {"pattern": r"(\d+)\s*gb\b(?!\s*(?:ssd|nvme|hdd))", "type": "int"},
         "storage_gb": {
@@ -87,6 +92,14 @@ LAPTOP = {
             "weight": 2,
             "required": True,
             "note": "Gen 6+ (under 2.8 lbs)",
+        },
+        {
+            "field": "is_parts",
+            "op": "eq",
+            "value": False,
+            "weight": 2,
+            "required": True,
+            "note": "whole working laptop, not parts/accessories/broken",
         },
         {
             "field": "seller_rating",
