@@ -141,6 +141,26 @@ zero, and which site supplies the winning deal most often.
 Example, over MCP: `run_backtest("thin-client-laptop")`, later
 `list_backtests()` and `get_backtest(id)`.
 
+## Dashboard UI
+
+An Astro (SSR) dashboard in `ui/` reads the same SQLite db read-only:
+
+- **Deals** (`/`) — filterable best-deals table with KPI tiles and the
+  product's verify-by-hand checklist.
+- **History** (`/history`) — observed prices over time; filled dots are
+  real sold prices, rings are asking prices.
+- **Backtests** (`/backtests`) — every stored backtest, visualized:
+  best price by lookback window, savings vs the 3-day baseline with
+  95% CIs, and per-site win rates. Caveats are always shown.
+- **Sites** (`/sites`) — which scrapers are actually working, with the
+  strategy that ran and the last error.
+
+Run it locally (`cd ui && npm install && npm run dev`, then
+http://localhost:4321, `PF_DB` to point at a db elsewhere) or in the
+container (`docker compose up ui`, port 4321, shares the `/data`
+volume with the MCP service). Charts follow a validated colorblind-safe
+palette; every chart has a table view, tooltips, and a dark mode.
+
 ## Caveats — read before trusting results
 
 - Scraping selectors rot. The built-in specs are best-effort snapshots;

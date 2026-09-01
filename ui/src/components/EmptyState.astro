@@ -1,0 +1,9 @@
+---
+/** Honest empty state: says exactly which MCP tool to run next. */
+interface Props { what: string; tool: string }
+const { what, tool } = Astro.props;
+---
+<div class="empty">
+  <p>No {what} yet.</p>
+  <p>Run <code>{tool}</code> via the MCP server, then reload.</p>
+</div>

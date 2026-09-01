@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 — 2026-08-31
+
+- Dashboard UI (`ui/`, Astro SSR): deals dashboard with filters and
+  KPI tiles, price-history explorer, backtest visualizations (best
+  price by window, savings vs baseline with 95% CIs, per-site win
+  rates), and a site-health view. Reads the SQLite db read-only;
+  `docker compose up ui` serves it on :4321 from the shared volume.
+
 ## 0.3.1 — 2026-08-31
 
 - eBay dropped its plain-HTML tier (live 403s regardless of user

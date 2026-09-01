@@ -1,0 +1,75 @@
+---
+/** Page shell: nav, theme tokens, and the shared tooltip layer.
+ * The tooltip layer is delegated: any element with data-tip-value /
+ * data-tip-label gets a hover+focus tooltip; content is inserted with
+ * textContent only (labels are untrusted data). */
+import "../styles/global.css";
+interface Props { title: string; active: string; product?: string | undefined }
+const { title, active, product } = Astro.props;
+const q = product ? `?product=${encodeURIComponent(product)}` : "";
+const tabs = [
+  ["/", "Deals", "deals"],
+  ["/history", "History", "history"],
+  ["/backtests", "Backtests", "backtests"],
+  ["/sites", "Sites", "sites"],
+];
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} · product-finder</title>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="top">
+        <h1>product-finder</h1>
+        <nav>
+          {tabs.map(([href, label, key]) => (
+            <a href={`${href}${key === "backtests" || key === "sites" ? "" : q}`} aria-current={active === key ? "page" : undefined}>{label}</a>
+          ))}
+        </nav>
+      </header>
+      <slot />
+    </div>
+    <div id="tooltip" role="status"></div>
+    <script>
+      const tip = document.getElementById("tooltip")!;
+      function show(el: Element, x: number, y: number) {
+        const value = el.getAttribute("data-tip-value");
+        const label = el.getAttribute("data-tip-label");
+        if (!value && !label) return;
+        tip.replaceChildren();
+        if (value) {
+          const v = document.createElement("div");
+          v.className = "t-value";
+          v.textContent = value; // untrusted: textContent only
+          tip.appendChild(v);
+        }
+        if (label)
+          for (const line of label.split("\n")) {
+            const l = document.createElement("div");
+            l.className = "t-label";
+            l.textContent = line;
+            tip.appendChild(l);
+          }
+        tip.style.display = "block";
+        const r = tip.getBoundingClientRect();
+        tip.style.left = Math.min(x + 14, window.innerWidth - r.width - 8) + "px";
+        tip.style.top = Math.min(y + 14, window.innerHeight - r.height - 8) + "px";
+      }
+      document.addEventListener("pointermove", (e) => {
+        const el = (e.target as Element | null)?.closest?.("[data-tip-value],[data-tip-label]");
+        if (el) show(el, e.clientX, e.clientY);
+        else tip.style.display = "none";
+      });
+      document.addEventListener("focusin", (e) => {
+        const el = (e.target as Element | null)?.closest?.("[data-tip-value],[data-tip-label]");
+        if (!el) { tip.style.display = "none"; return; }
+        const r = el.getBoundingClientRect();
+        show(el, r.left + r.width / 2, r.bottom);
+      });
+      document.addEventListener("pointerleave", () => (tip.style.display = "none"));
+    </script>
+  </body>
+</html>

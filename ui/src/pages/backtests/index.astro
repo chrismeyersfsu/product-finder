@@ -1,0 +1,33 @@
+---
+/** Stored backtests: newest first, linking into the visual detail. */
+import EmptyState from "../../components/EmptyState.astro";
+import Layout from "../../layouts/Layout.astro";
+import * as db from "../../lib/db";
+import { windowLabel } from "../../lib/format";
+
+const rows = db.listBacktests();
+---
+<Layout title="Backtests" active="backtests">
+  {rows.length === 0 ? (
+    <EmptyState what="backtests" tool='run_backtest("thin-client-laptop")' />
+  ) : (
+    <div class="card">
+      <h2>Backtests <span class="sub">— stored in SQLite; run more via the MCP tool run_backtest</span></h2>
+      <table class="data">
+        <thead><tr><th class="num">#</th><th>Product</th><th>Windows</th><th class="num">Pivots</th><th class="num">Min score</th><th>Created</th></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr>
+              <td class="num"><a href={`/backtests/${r.id}`}>{r.id}</a></td>
+              <td><a href={`/backtests/${r.id}`}>{r.product_slug}</a></td>
+              <td>{((r.params.windows_days as number[]) ?? []).map(windowLabel).join(" · ")}</td>
+              <td class="num">{String(r.params.n_pivots ?? "—")}</td>
+              <td class="num">{String(r.params.min_score ?? "—")}</td>
+              <td>{r.created_at.slice(0, 16).replace("T", " ")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</Layout>

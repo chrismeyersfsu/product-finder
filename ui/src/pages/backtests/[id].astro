@@ -1,0 +1,88 @@
+---
+/** One backtest, visualized: verdicts up top, then best-price-by-
+ * window, savings-vs-baseline with CIs, and per-site win rates.
+ * Coverage and caveats are always shown — never hidden. */
+import BestPriceChart from "../../components/BestPriceChart.astro";
+import ImprovementChart from "../../components/ImprovementChart.astro";
+import Layout from "../../layouts/Layout.astro";
+import StatTile from "../../components/StatTile.astro";
+import WinRateChart from "../../components/WinRateChart.astro";
+import * as db from "../../lib/db";
+import { day, windowLabel } from "../../lib/format";
+
+const id = Number(Astro.params.id);
+const bt = Number.isInteger(id) ? db.getBacktest(id) : null;
+if (!bt) return new Response("backtest not found", { status: 404 });
+const res = bt.results as any;
+const knownSites = db.listSites().map((s) => s.slug);
+
+const winEntries = Object.entries(res.windows ?? {}) as [string, any][];
+const windows = winEntries
+  .map(([d, w]) => ({
+    days: Number(d),
+    mean: w.mean_best_price ?? null,
+    median: w.median_best_price ?? null,
+    min: w.min_best_price ?? null,
+    n: w.n_pivots_with_data ?? 0,
+    insufficient: !!w.insufficient_data,
+  }))
+  .sort((a, b) => a.days - b.days);
+const imps = winEntries
+  .filter(([, w]) => w.vs_shortest_window)
+  .map(([d, w]) => ({
+    days: Number(d),
+    baseline: w.vs_shortest_window.baseline_days,
+    mean: w.vs_shortest_window.mean_improvement,
+    pctv: w.vs_shortest_window.mean_improvement_pct,
+    ci: w.vs_shortest_window.ci95 as [number, number],
+    frac: w.vs_shortest_window.frac_pivots_improved,
+    n: w.vs_shortest_window.n_paired,
+  }))
+  .sort((a, b) => a.days - b.days);
+const siteRows = Object.entries(res.sites ?? {}).map(([site, s]: [string, any]) => ({
+  site,
+  winRate: s.win_rate,
+  wins: s.wins,
+  meanPrice: s.mean_winning_price,
+}));
+const cov = res.coverage ?? {};
+const hasData = windows.some((w) => w.mean != null);
+---
+<Layout title={`Backtest #${bt.id}`} active="backtests">
+  <div class="card">
+    <h2>Backtest #{bt.id} <span class="sub">— {bt.product_slug} · {bt.created_at.slice(0, 16).replace("T", " ")}</span></h2>
+    {(res.verdict ?? []).map((v: string) => <p class="verdict">{v}</p>)}
+    <div class="tiles">
+      <StatTile label="Observations" value={String(cov.n_observations ?? 0)} hint={`${cov.n_qualifying ?? 0} qualifying`} />
+      <StatTile label="Pivots sampled" value={String(cov.n_pivots_sampled ?? bt.params.n_pivots ?? "—")} />
+      <StatTile label="Data span" value={cov.span_days != null ? `${cov.span_days}d` : "—"} hint={cov.span_start ? `${day(cov.span_start)} → ${day(cov.span_end)}` : undefined} />
+      <StatTile label="Windows dropped" value={String((cov.dropped_windows ?? []).length)} hint={(cov.dropped_windows ?? []).map(windowLabel).join(" · ") || "none"} />
+    </div>
+  </div>
+
+  {hasData && (
+    <div class="card">
+      <h2>Best price found, by how long you look back</h2>
+      <BestPriceChart windows={windows} />
+    </div>
+  )}
+  {imps.length > 0 && (
+    <div class="card">
+      <h2>Does waiting help? <span class="sub">— savings vs the {windowLabel(imps[0]!.baseline)} window</span></h2>
+      <ImprovementChart imps={imps} />
+    </div>
+  )}
+  {siteRows.length > 0 && (
+    <div class="card">
+      <h2>Which site wins</h2>
+      <WinRateChart rows={siteRows} knownSites={knownSites} />
+    </div>
+  )}
+
+  <div class="card">
+    <h2>Caveats</h2>
+    <ul class="caveats">
+      {(res.caveats ?? []).map((c: string) => <li>{c}</li>)}
+    </ul>
+  </div>
+</Layout>

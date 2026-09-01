@@ -1,0 +1,112 @@
+---
+/** Deals dashboard: one filter row scoping the KPI tiles, the deals
+ * table, and the manual-checks card below it. */
+import EmptyState from "../components/EmptyState.astro";
+import StatTile from "../components/StatTile.astro";
+import Layout from "../layouts/Layout.astro";
+import { siteVar } from "../lib/colors";
+import * as db from "../lib/db";
+import { day, money, moneyCents } from "../lib/format";
+
+const products = db.listProducts();
+const url = Astro.url;
+const productSlug = url.searchParams.get("product") || products[0]?.slug || "";
+const product = products.find((p) => p.slug === productSlug);
+const minScore = url.searchParams.get("min_score");
+const maxPrice = url.searchParams.get("max_price");
+const site = url.searchParams.get("site") || "";
+const includeHardFails = url.searchParams.get("hard_fails") === "1";
+const filters: db.DealFilters = {
+  minScore: minScore ? Number(minScore) : undefined,
+  maxPrice: maxPrice ? Number(maxPrice) : undefined,
+  site: site || undefined,
+  includeHardFails,
+};
+const rows = product ? db.deals(productSlug, filters) : [];
+const sites = product ? db.listingSites(productSlug) : [];
+const knownSites = db.listSites().map((s) => s.slug);
+const priced = rows.filter((r) => r.price != null && r.price > 0);
+const best = priced.length ? Math.min(...priced.map((r) => r.price!)) : null;
+const median = priced[0]?.median_price ?? null;
+const nSites = new Set(rows.map((r) => r.site_slug)).size;
+---
+<Layout title="Deals" active="deals" product={productSlug}>
+  {!db.hasDb() && <EmptyState what="database" tool="seed_defaults" />}
+  <form class="filters" method="get" action="/">
+    <label>Product
+      <select name="product">
+        {products.map((p) => <option value={p.slug} selected={p.slug === productSlug}>{p.name}</option>)}
+      </select>
+    </label>
+    <label>Min score
+      <input type="number" name="min_score" min="0" max="1" step="0.05" value={minScore ?? ""} placeholder="0.5" />
+    </label>
+    <label>Max price
+      <input type="number" name="max_price" min="0" step="10" value={maxPrice ?? ""} placeholder="any" />
+    </label>
+    <label>Site
+      <select name="site">
+        <option value="">all sites</option>
+        {sites.map((s) => <option value={s} selected={s === site}>{s}</option>)}
+      </select>
+    </label>
+    <label class="chk"><input type="checkbox" name="hard_fails" value="1" checked={includeHardFails} /> include hard fails</label>
+    <button type="submit">Apply</button>
+  </form>
+
+  {product ? (
+    <>
+      <div class="tiles">
+        <StatTile label="Qualifying listings" value={String(rows.length)} hint={includeHardFails ? "incl. hard fails" : "hard fails excluded"} />
+        <StatTile label="Best price" value={money(best)} />
+        <StatTile label="Median price" value={money(median)} />
+        <StatTile label="Sites reporting" value={String(nSites)} hint={`${sites.length} with any listing`} />
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyState what={`listings for ${product.name}`} tool={`run_search("${productSlug}")`} />
+      ) : (
+        <div class="card">
+          <h2>Best deals <span class="sub">— sorted by score, then price</span></h2>
+          <div class="wrap-x">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>Listing</th><th>Site</th><th class="num">Price</th><th class="num">vs median</th>
+                  <th class="num">Score</th><th>Condition</th><th class="num">Seller</th><th>Last seen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr>
+                    <td><a href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a>
+                      {r.hard_fails.length > 0 && <div class="status status-critical"><span class="ic">✗</span>{r.hard_fails.join("; ")}</div>}
+                    </td>
+                    <td><span class="swatch" style={`background:${siteVar(r.site_slug, knownSites)}`}></span>{r.site_slug}</td>
+                    <td class="num">{moneyCents(r.price)}</td>
+                    <td class="num">{r.pct_vs_median == null ? "—" : `${r.pct_vs_median > 0 ? "+" : ""}${r.pct_vs_median}%`}</td>
+                    <td class="num">{r.score == null ? "—" : r.score.toFixed(2)}</td>
+                    <td>{r.condition ?? "—"}</td>
+                    <td class="num">{r.seller_rating != null ? `${r.seller_rating}%` : "—"}{r.seller_feedback_count != null ? ` (${r.seller_feedback_count.toLocaleString()})` : ""}</td>
+                    <td>{day(r.last_seen)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {product.manual_checks.length > 0 && (
+        <div class="card">
+          <h2>Verify by hand before buying</h2>
+          <ul>
+            {product.manual_checks.map((c) => <li>{c}</li>)}
+          </ul>
+        </div>
+      )}
+    </>
+  ) : (
+    <EmptyState what="products" tool="seed_defaults" />
+  )}
+</Layout>

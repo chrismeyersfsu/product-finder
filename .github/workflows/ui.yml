@@ -1,0 +1,23 @@
+name: ui
+
+# Thin trigger: the logic lives in ui/ci.sh so CI is runnable and
+# debuggable locally.
+on:
+  push:
+    paths:
+      - "ui/**"
+      - ".github/workflows/ui.yml"
+  pull_request:
+    paths:
+      - "ui/**"
+      - ".github/workflows/ui.yml"
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: ./ui/ci.sh
