@@ -10,5 +10,5 @@ grep -q "^version = \"${version}\"" packages/core/pyproject.toml || {
     exit 1
 }
 ./packages/core/ci.sh
-uv build --package myproj-core
+uv build --package product-finder-core
 gh release create "$tag" dist/*.whl --title "$tag" --generate-notes

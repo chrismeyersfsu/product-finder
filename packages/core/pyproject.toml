@@ -1,12 +1,12 @@
 [project]
-name = "myproj-core"
+name = "product-finder-core"
 version = "0.1.0"
-description = "One-line description of what this package owns"
+description = "Generic product-search domain: data model, SQLite storage, criteria scoring"
 requires-python = ">=3.12"
 dependencies = []
 
 [project.scripts]
-myproj = "myproj_core.cli:main"
+product-finder = "product_finder_core.cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8"]
@@ -16,4 +16,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/myproj_core"]
+packages = ["src/product_finder_core"]

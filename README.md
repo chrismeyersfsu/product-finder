@@ -1,52 +1,79 @@
-# python-monorepo-template
+# product-finder
 
-A uv workspace monorepo, stubbed and ready for a new Python project:
-one lockfile, one virtualenv, small installable packages under
-`packages/`, each owning a single concern. Structure follows the
-portable patterns in `caseworkflow/docs/patterns/` (workspace layout,
-conventions, ci-release); the heavier patterns attach later as the
-project earns them.
+Generic product-search engine: define a product as data (search
+queries + regex extractors + weighted criteria), search 21
+marketplaces, score every listing against the criteria, store it all
+in SQLite, and drive the whole thing over MCP. Ships seeded with its
+founding use case: a thin-client laptop (ThinkPad X1 Carbon Gen 6+,
+16GB, NVMe, FHD IPS) for RDP work.
 
-## Use it
+## Quickstart
 
+```sh
+uv sync
+uv run product-finder init          # create the SQLite db (or set PF_DB)
+uv run product-finder seed          # insert the laptop product
+uv run product-finder products
 ```
-gh repo create <name> --private --template chrismeyersfsu/python-monorepo-template --clone
-cd <name>
-./rename.sh <name>          # replaces the myproj placeholder, locks, hooks, self-deletes
-./packages/core/ci.sh       # green from the first commit
+
+Run the MCP server (stdio) and wire it into Claude Code:
+
+```sh
+claude mcp add product-finder -- uv --directory /path/to/product-finder run product-finder-mcp
 ```
 
-## What's stubbed
+Or in a container (streamable-http on :8848, db persisted in a volume):
 
-| Piece | Where |
-|---|---|
-| Workspace root: members, dev group, ruff config | `pyproject.toml` |
-| One package, src layout, hatchling, CLI via `[project.scripts]` | `packages/core/` |
-| Per-package CI script (sync, ruff over all packages, pytest) | `packages/core/ci.sh` |
-| Per-package release script (tag `core-vX.Y.Z` → wheel → GitHub release) | `packages/core/release.sh` |
-| Thin path-filtered workflows calling the scripts | `.github/workflows/` |
-| Pre-commit hook (fast half of ci.sh) | `.githooks/pre-commit` |
-| Test stub showing the HTTP-at-one-seam faking convention | `packages/core/tests/` |
-| Changelog (Keep a Changelog) and scoped agent instructions | `CHANGELOG.md`, `CLAUDE.md` |
+```sh
+docker compose up --build
+claude mcp add --transport http product-finder http://localhost:8848/mcp
+```
 
-## Conventions baked in
+## MCP tools
 
-- Distribution names use dashes (`myproj-core`), import names use
-  underscores (`myproj_core`).
-- Test-only dependencies go in `[dependency-groups] dev`, never in
-  `dependencies` — runtime metadata stays honest.
-- CLIs are `[project.scripts]` entries; `uv run <name>` is the only
-  invocation anyone types.
-- Module docstrings state the module's contract; a docstring edit is a
-  docs edit.
-- `CHANGELOG.md` entry for every user-facing feature, same commit.
+- `seed_defaults` — seed the laptop product + the 21 built-in sites
+- `add_product` / `list_products` / `get_product` / `delete_product` —
+  introduce any new product as pure data, no code
+- `add_site` / `list_sites` / `set_site_enabled` — manage marketplaces
+- `run_search` — fetch every enabled site for a product's queries,
+  extract attributes from titles, score, and store
+- `query_listings` — filter stored listings (score, price, site)
+- `best_deals` — top-scored listings with price-vs-median context plus
+  the product's manual checks (battery health, keyboard wear, ...)
+- `project_list_files` / `project_read_file` / `project_write_file` /
+  `project_run_ci` — modify this project itself over MCP, scoped to
+  the repo root
 
-## Growing the project
+## Defining a product
 
-Add a package per new concern (`packages/<concern>/`, copy `core`'s
-shape, add it to the new package's workflow paths). When the import
-graph needs enforcing, add a devtools package with import-linter
-contracts; when orchestrators need extensions, use entry points; see
-the pattern docs for storage (single-file SQLite Store), telemetry
-(fail-safe OTel leaf package), and deployment (one image, systemd
-quadlets).
+A product is four pieces of data (see the worked example in
+`packages/core/src/product_finder_core/seed.py`):
+
+- **queries** — strings sent to each site's search page
+- **extractors** — `field -> {pattern, type}` regexes pulled from
+  listing titles (`int`, `float`, `str`, `bool`, `size_gb`)
+- **criteria** — weighted rules `{field, op, value, weight, required}`
+  with ops `gte/lte/eq/contains/one_of/matches/exists`; score is
+  earned-weight / total-weight, and a *present* value contradicting a
+  `required` rule hard-fails the listing (missing = unknown, not fail)
+- **manual_checks** — things only a human can verify before buying
+
+## Packages
+
+- `packages/core` — data model, SQLite storage, scoring (no network)
+- `packages/sites` — 21 site adapters: one HTTP seam, pure parsers
+- `packages/mcp` — the MCP server and search pipeline glue
+
+## Caveats — read before trusting results
+
+- Scraping selectors rot. The built-in specs are best-effort snapshots;
+  when a site redesigns, update its row in the `sites` table (or
+  `spec.py`) — no code changes needed for selector fixes.
+- JS-heavy / bot-blocking sites (amazon, walmart, target, bestbuy,
+  backmarket, mercari, offerup, shopgoodwill, govdeals) will often
+  return errors or empty results to a plain HTTP client. `run_search`
+  records this per site in its `errors` field and keeps going.
+- Craigslist searches one region; put your region's subdomain in its
+  `config.url` (default is sfbay).
+- eBay is the only built-in that yields seller rating/feedback counts,
+  so seller-quality criteria only score there.

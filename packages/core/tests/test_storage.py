@@ -1,0 +1,69 @@
+"""Storage CRUD contract: JSON columns round-trip, listings dedupe on url."""
+
+from product_finder_core import storage
+
+
+def _conn(tmp_path):
+    return storage.connect(str(tmp_path / "t.db"))
+
+
+def test_product_roundtrip(tmp_path):
+    conn = _conn(tmp_path)
+    prod = storage.upsert_product(
+        conn,
+        {
+            "slug": "widget",
+            "name": "Widget",
+            "queries": ["blue widget"],
+            "criteria": [{"field": "price", "op": "lte", "value": 5}],
+        },
+    )
+    assert prod["queries"] == ["blue widget"]
+    assert storage.list_products(conn)[0]["slug"] == "widget"
+    prod["name"] = "Widget 2"
+    assert storage.upsert_product(conn, prod)["name"] == "Widget 2"
+    assert storage.delete_product(conn, "widget")
+    assert storage.get_product(conn, "widget") is None
+
+
+def test_listing_upsert_dedupes_on_url(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_product(conn, {"slug": "w"})
+    li = {
+        "product_slug": "w",
+        "site_slug": "ebay",
+        "url": "http://x/1",
+        "title": "a",
+        "price": 10.0,
+        "score": 0.5,
+    }
+    storage.upsert_listing(conn, li)
+    storage.upsert_listing(conn, {**li, "price": 8.0})
+    rows = storage.query_listings(conn, "w")
+    assert len(rows) == 1 and rows[0]["price"] == 8.0
+    assert rows[0]["first_seen"] <= rows[0]["last_seen"]
+
+
+def test_query_filters_hard_fails(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_product(conn, {"slug": "w"})
+    storage.upsert_listing(
+        conn,
+        {
+            "product_slug": "w",
+            "site_slug": "ebay",
+            "url": "http://x/2",
+            "score": 0.9,
+            "hard_fails": ["8GB RAM"],
+        },
+    )
+    assert storage.query_listings(conn, "w") == []
+    assert len(storage.query_listings(conn, "w", include_hard_fails=True)) == 1
+
+
+def test_sites_table(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_site(conn, {"slug": "ebay", "name": "eBay", "config": {"url": "u"}})
+    assert storage.list_sites(conn)[0]["config"] == {"url": "u"}
+    storage.set_site_enabled(conn, "ebay", False)
+    assert storage.list_sites(conn, enabled_only=True) == []

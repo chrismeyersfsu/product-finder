@@ -1,0 +1,9 @@
+services:
+  product-finder:
+    build: .
+    ports:
+      - "8848:8848"
+    volumes:
+      - pf-data:/data
+volumes:
+  pf-data:
