@@ -22,7 +22,7 @@ def tmp_db(tmp_path, monkeypatch):
 def test_seed_and_product_crud():
     out = server.seed_defaults()
     assert "thin-client-laptop" in out["products"]
-    assert len(out["sites"]) == 25
+    assert len(out["sites"]) == 26
     assert server.get_product("thin-client-laptop")["criteria"]
 
     server.add_product(

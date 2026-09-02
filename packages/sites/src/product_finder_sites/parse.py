@@ -17,8 +17,23 @@ strings (grocery sites: a fixed store address and "new") — copied onto
 every row verbatim, unlike the per-card `seller`/`date` selectors.
 kroger_api rows get the same two fields from strategy config, since a
 Kroger product search is already scoped to one resolved store.
+
+copart_csv is the one parser that takes the query: its body is
+Copart's whole-inventory sales CSV, so parse_listings(..., query=)
+keeps only rows whose year/make/model/trim words contain every query
+word. Columns are matched by normalized header name (Copart's
+documented "CSV Sales Data" layout: Lot number, Year, Make, Model
+Group, Model Detail, Trim, Odometer, Damage Description, Sale Title
+Type, Runs/Drives, High Bid, Buy-It-Now Price, Location city/state);
+price is the Buy-It-Now price when set, else the current high bid,
+else None; the title carries "YEAR MAKE MODEL, <odometer> mi" and the
+`condition` string carries title type, damage, runs/drives and
+whether the price is a bid — so a product's title-only rules don't
+see "salvage", which is most of Copart. Every row is a lot page URL.
 """
 
+import csv
+import io
 import json
 import re
 from datetime import datetime
@@ -314,10 +329,130 @@ def _parse_kroger_api(config: dict, body: str) -> list[dict]:
     return out
 
 
-def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
+def _norm_header(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+def _column(headers: list[str], *candidates: str) -> int | None:
+    """Index of the first header equal to, then starting with, a candidate."""
+    normed = [_norm_header(h) for h in headers]
+    for cand in candidates:
+        if cand in normed:
+            return normed.index(cand)
+    for cand in candidates:
+        for i, h in enumerate(normed):
+            if h.startswith(cand):
+                return i
+    return None
+
+
+def _money(text: str) -> float | None:
+    m = _NUM_RE.search(text or "")
+    value = float(m.group(1).replace(",", "")) if m else None
+    return value if value else None
+
+
+def _tokens(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def _parse_copart_csv(config: dict, body: str, query: str) -> list[dict]:
+    """Copart sales-data CSV -> listings for the lots matching `query`."""
+    reader = csv.reader(io.StringIO(body.lstrip("\ufeff")))
+    try:
+        headers = next(reader)
+    except StopIteration:
+        return []
+    col = {
+        "lot": _column(headers, "lotnumber", "lotid", "lot"),
+        "year": _column(headers, "year"),
+        "make": _column(headers, "make"),
+        "group": _column(headers, "modelgroup"),
+        "detail": _column(headers, "modeldetail", "model"),
+        "trim": _column(headers, "trim"),
+        "type": _column(headers, "vehicletype"),
+        "odometer": _column(headers, "odometer", "mileage"),
+        "damage": _column(headers, "damagedescription"),
+        "damage2": _column(headers, "secondarydamage"),
+        "title_type": _column(headers, "saletitletype"),
+        "runs": _column(headers, "runsdrives"),
+        "bid": _column(headers, "highbid"),
+        "bin": _column(headers, "buyitnowprice"),
+        "city": _column(headers, "locationcity"),
+        "state": _column(headers, "locationstate"),
+        "zip": _column(headers, "locationzip"),
+        "sale_date": _column(headers, "saledate"),
+        "currency": _column(headers, "currencycode"),
+    }
+    if col["lot"] is None or col["make"] is None:
+        return []
+    site_url = config.get("site_url", "https://www.copart.com")
+    want = _tokens(query)
+    out = []
+    for row in reader:
+        v = {k: (row[i].strip() if i is not None and i < len(row) else "") for k, i in col.items()}
+        lot = v["lot"]
+        if not lot:
+            continue
+        if v["currency"] and v["currency"].upper() != "USD":
+            continue
+        group, detail, trim = v["group"], v["detail"], v["trim"]
+        model = detail if detail.upper().startswith(group.upper()) else f"{group} {detail}"
+        if trim and trim.lower() not in model.lower():
+            model = f"{model} {trim}"
+        vehicle = " ".join(x for x in (v["year"], v["make"], model) if x)
+        if not vehicle:
+            continue
+        if want and not want <= _tokens(f"{vehicle} {v['type']}"):
+            continue
+        title = vehicle
+        odometer = re.sub(r"[^\d]", "", v["odometer"])
+        if odometer and int(odometer) > 0:
+            title = f"{title}, {int(odometer)} mi"
+        buy_now, bid = _money(v["bin"]), _money(v["bid"])
+        price = buy_now or bid
+        parts = []
+        if v["title_type"]:
+            parts.append(v["title_type"].title())
+        damage = v["damage"]
+        if damage and v["damage2"] and v["damage2"].upper() != damage.upper():
+            damage = f"{damage}/{v['damage2']}"
+        if damage:
+            parts.append(damage.title())
+        if v["runs"]:
+            parts.append(v["runs"].title())
+        sale = f", sale {v['sale_date']}" if v["sale_date"] else ""
+        if buy_now:
+            parts.append("buy it now")
+        elif bid:
+            parts.append(f"current bid{sale}")
+        elif sale:
+            parts.append(f"no bids{sale}")
+        city, state = v["city"], v["state"]
+        location = f"{city.title()}, {state.upper()}" if city and state else (v["zip"] or None)
+        out.append(
+            {
+                "title": title,
+                "price": price,
+                "url": f"{site_url}/lot/{lot}",
+                "location": location,
+                "condition": "; ".join(parts) or None,
+                "seller_rating": None,
+                "seller_feedback_count": None,
+            }
+        )
+    return out
+
+
+def parse_listings(
+    strategy: dict, page_url: str, body: str, query: str | None = None
+) -> list[dict]:
     """Dispatch on strategy kind. `strategy` is a {kind, config} dict —
-    a flat single-strategy site works too (same shape)."""
+    a flat single-strategy site works too (same shape). `query` only
+    matters to whole-inventory feeds (copart_csv) that filter rows."""
     kind = strategy["kind"]
+    if kind == "copart_csv":
+        return _parse_copart_csv(strategy["config"], body, query or "")
     if kind == "reddit_json":
         return _parse_reddit_json(page_url, body)
     if kind in ("css", "browser_css"):

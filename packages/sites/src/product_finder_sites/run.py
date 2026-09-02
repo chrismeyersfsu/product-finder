@@ -6,7 +6,7 @@ stores or scores (callers do that with packages/core). Callers rely
 on: search_site() returns errors as values, never raises, reports
 which strategy actually ran ("strategy") and every attempt
 ("attempts"); the joined error string labels every tier compactly
-(api/css/browser/json) and calls a 200-with-no-items wall a
+(api/css/browser/json/csv) and calls a 200-with-no-items wall a
 "challenge page". An empty page falls through to the next strategy.
 Category-feed configs (local_filter) drop rows not matching the
 query. search_many() dedupes listings by url across queries and keeps
@@ -21,7 +21,7 @@ from . import api, fetch, parse
 
 # Compact tier labels for the per-site error string ("api: KEY unset;
 # css: HTTP 403; browser: challenge page") shown verbatim by /sites.
-_TIER_LABEL = {"css": "css", "reddit_json": "json"}
+_TIER_LABEL = {"css": "css", "reddit_json": "json", "copart_csv": "csv"}
 
 # Wall/challenge pages that answer 200 with no items.
 _CHALLENGE_RE = re.compile(
@@ -78,7 +78,7 @@ def search_site(site: dict, query: str) -> dict:
         kind = strategy["kind"]
         try:
             body, page_url = _fetch(strategy, query)
-            listings = parse.parse_listings(strategy, page_url, body)
+            listings = parse.parse_listings(strategy, page_url, body, query=query)
         except fetch.FetchError as e:
             attempts.append({"strategy": kind, "error": str(e)})
             continue

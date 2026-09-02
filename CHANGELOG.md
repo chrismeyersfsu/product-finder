@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.14.0 — 2026-09-02
+
+- `copart` site (vehicle auctions), a new `copart_csv` strategy kind:
+  copart.com is walled at every tier, so it reads Copart's member-only
+  "Download Sales Data" CSV instead — cached at `COPART_CSV` (default
+  beside the database), re-downloaded with the `COPART_COOKIES`
+  session cookie header when older than `max_age_hours`, or simply
+  saved there by hand. Rows are filtered per query (every query word
+  must match year/make/model/trim); price is Buy-It-Now else the
+  current high bid; title type, damage, runs/drives and bid status
+  land in `condition`; location is the yard's city for the distance
+  filter. `parse_listings` gained an optional `query` for
+  whole-inventory feeds. Attached to the four car products.
+
 ## 0.13.0 — 2026-09-02
 
 - Price per unit. core's new `units.py` reads the pack size out of a
