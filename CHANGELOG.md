@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.14.0 — 2026-09-02
+
+- Three dealer used-car sites, attached to the car products:
+  `autolist` (autolist.com's keyless JSON search — CarGurus dealer
+  inventory — free-text keywords within `radius_mi` of `zip`, used
+  only), `cars-com` (browser-rendered keyword search near a zip; each
+  card's data-vehicle-details JSON is read, so mileage, dealer and
+  "City, ST" come through) and `carvana` (browser-rendered
+  make-model[-trim] path built from the new `{query_slug}` URL
+  placeholder; nationwide delivery, so no location — a distance cap
+  hides its rows). Rows are titled "Used YEAR Make Model Trim, N mi"
+  for the existing year/mileage extractors; condition carries
+  new/used + dealer. Copart was tried and dropped: no reachable feed.
+  Still walled from this network even headless: autotrader, cargurus,
+  carfax, truecar, carmax, edmunds, kbb.
+
 ## 0.13.0 — 2026-09-02
 
 - Price per unit. core's new `units.py` reads the pack size out of a

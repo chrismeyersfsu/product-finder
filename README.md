@@ -90,6 +90,18 @@ for that fetch only — never written to the database, config, or logs.
 Use your own account at your own risk: Facebook rate-limits and may
 challenge automated sessions.
 
+### Used-car dealer sites
+
+`autolist`, `cars-com` and `carvana` search dealer inventory (the
+Craigslist/Facebook sites cover private sellers). `autolist` is a
+keyless JSON API (CarGurus's inventory); the other two need the
+browser tier. All three fold the odometer into the title ("Used 2019
+Honda Fit EX, 87024 mi") so a car product's mileage extractor works
+unchanged, and put new/used plus the dealer name in the condition
+column. Carvana has no free-text search — its URL is the query
+slugified into a make-model[-trim] path — and delivers nationwide, so
+its rows have no location and drop out under a distance cap.
+
 ## Container layout
 
 The Dockerfile has two targets:

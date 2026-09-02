@@ -17,6 +17,16 @@ strings (grocery sites: a fixed store address and "new") — copied onto
 every row verbatim, unlike the per-card `seller`/`date` selectors.
 kroger_api rows get the same two fields from strategy config, since a
 Kroger product search is already scoped to one resolved store.
+
+Dealer used-car rows (autolist_api, carscom, carvana) are titled
+"[Used] YEAR Make Model Trim, <odometer> mi" so the car products'
+year/mileage extractors read them like a Craigslist title; condition
+is the site's new/used/certified plus the dealer name; location is the
+dealer's "City, ST" where the page carries one (carvana is a
+nationwide delivery site — its rows have no location, so a distance
+cap hides them). carscom reads each fuse-card's data-vehicle-details
+JSON attribute rather than the visible spans; carvana reads the
+per-vehicle schema.org Vehicle JSON-LD scripts on its results page.
 """
 
 import json
@@ -314,6 +324,120 @@ def _parse_kroger_api(config: dict, body: str) -> list[dict]:
     return out
 
 
+def _parse_autolist_api(config: dict, body: str) -> list[dict]:
+    site_url = config.get("site_url", "https://www.autolist.com")
+    out = []
+    for r in _json_items(body, "records"):
+        href = r.get("href_target")
+        vehicle = " ".join(
+            str(x) for x in (r.get("year"), r.get("make"), r.get("model"), r.get("trim")) if x
+        )
+        if not href or not vehicle:
+            continue
+        miles = r.get("mileage_unformatted")
+        title = f"{vehicle}, {int(miles)} mi" if miles else vehicle
+        price = r.get("price_unformatted")
+        city, state = r.get("city"), r.get("state")
+        condition = str(r.get("condition") or "used")
+        if r.get("dealer_name"):
+            condition = f"{condition}; {r['dealer_name']}"
+        out.append(
+            {
+                "title": title,
+                "price": float(price) if price else None,
+                "url": urljoin(site_url, href),
+                "location": f"{city}, {state}" if city and state else None,
+                "condition": condition,
+                "seller_rating": None,
+                "seller_feedback_count": None,
+            }
+        )
+    return out
+
+
+# "Greensboro, NC (48 mi)" — the dealer line on a cars.com card; the
+# city is a run of capitalized words so the dealer name before it
+# ("Toyota of Greensboro 4.4") is not swallowed.
+_CARSCOM_LOCATION_RE = re.compile(
+    r"((?:[A-Z][\w.'\u2019-]*\s)*[A-Z][\w.'\u2019-]*,\s*[A-Z]{2})\s*\(\d[\d,]*\s*mi\)"
+)
+# "Used 2015 Toyota Prius Two with 67298 miles - $18,990" — carvana JSON-LD description
+_CARVANA_DESC_RE = re.compile(r"^(?:\w+\s+)?(\d{4}\s.+?)\s+with\s+[\d,]+\s+miles", re.IGNORECASE)
+
+
+def _parse_carscom(page_url: str, body: str) -> list[dict]:
+    soup = BeautifulSoup(body, "html.parser")
+    out = []
+    for card in soup.select("fuse-card[data-vehicle-details]"):
+        try:
+            d = json.loads(card["data-vehicle-details"])
+        except ValueError:
+            continue
+        link = card.select_one("a[data-card-link], card-gallery[data-card-href]")
+        href = link.get("href") or link.get("data-card-href") if link else None
+        vehicle = " ".join(str(d.get(k) or "") for k in ("year", "make", "model", "trim")).split()
+        if not href or not vehicle:
+            continue
+        stock = str(d.get("stockType") or "").strip()
+        title = " ".join(([stock] if stock else []) + vehicle)
+        miles = str(d.get("mileage") or "").replace(",", "")
+        if miles.isdigit() and int(miles) > 0:
+            title = f"{title}, {int(miles)} mi"
+        seller = d.get("seller") or {}
+        m = _CARSCOM_LOCATION_RE.search(card.get_text(" ", strip=True))
+        condition = stock.lower() or "used"
+        if seller.get("dealerName"):
+            condition = f"{condition}; {seller['dealerName']}"
+        out.append(
+            {
+                "title": title,
+                "price": _price(f"${d['price']}") if d.get("price") else None,
+                "url": urljoin(page_url, href.split("?")[0]),
+                "location": m.group(1) if m else (seller.get("zip") or None),
+                "condition": condition,
+                "seller_rating": None,
+                "seller_feedback_count": None,
+            }
+        )
+    return out
+
+
+def _parse_carvana(page_url: str, body: str) -> list[dict]:
+    soup = BeautifulSoup(body, "html.parser")
+    out = []
+    for node in soup.select("script[data-testid=vehicle-ld]"):
+        try:
+            d = json.loads(node.string or "")
+        except ValueError:
+            continue
+        if d.get("@type") != "Vehicle":
+            continue
+        offer = d.get("offers") or {}
+        url = offer.get("url")
+        m = _CARVANA_DESC_RE.match(d.get("description") or "")
+        vehicle = m.group(1) if m else d.get("name")
+        if not url or not vehicle:
+            continue
+        cond = str(d.get("itemCondition") or "Used")
+        title = f"{cond} {vehicle}"
+        miles = d.get("mileageFromOdometer")
+        if miles:
+            title = f"{title}, {int(miles)} mi"
+        price = offer.get("price")
+        out.append(
+            {
+                "title": title,
+                "price": float(price) if price else None,
+                "url": urljoin(page_url, url),
+                "location": None,
+                "condition": f"{cond.lower()}; Carvana (delivery)",
+                "seller_rating": None,
+                "seller_feedback_count": None,
+            }
+        )
+    return out
+
+
 def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
     """Dispatch on strategy kind. `strategy` is a {kind, config} dict —
     a flat single-strategy site works too (same shape)."""
@@ -334,4 +458,10 @@ def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
         return _parse_goodwill_api(body)
     if kind == "kroger_api":
         return _parse_kroger_api(strategy["config"], body)
+    if kind == "autolist_api":
+        return _parse_autolist_api(strategy["config"], body)
+    if kind == "carscom":
+        return _parse_carscom(page_url, body)
+    if kind == "carvana":
+        return _parse_carvana(page_url, body)
     raise ValueError(f"unknown strategy kind: {kind}")

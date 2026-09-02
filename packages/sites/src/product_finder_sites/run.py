@@ -1,7 +1,9 @@
 """Search orchestration inside the sites concern: site x query -> listings.
 
 Owns strategy iteration (API -> plain HTML -> browser), URL
-construction, and error containment around fetch/api + parse. Never
+construction ({query} is the URL-quoted query, {query_slug} its
+hyphenated lowercase form for path-style searches), and error
+containment around fetch/api + parse. Never
 stores or scores (callers do that with packages/core). Callers rely
 on: search_site() returns errors as values, never raises, reports
 which strategy actually ran ("strategy") and every attempt
@@ -34,7 +36,7 @@ _CHALLENGE_RE = re.compile(
 
 # Strategy kinds fetched by the browser seam (config may carry a
 # cookies_env naming an env var whose cookie header logs the page in).
-BROWSER_KINDS = {"browser_css", "facebook_marketplace"}
+BROWSER_KINDS = {"browser_css", "facebook_marketplace", "carscom", "carvana"}
 
 
 def _label(kind: str) -> str:
@@ -65,6 +67,8 @@ def _fetch(strategy: dict, query: str) -> tuple[str, str]:
         return api.FETCHERS[kind](config, query)
     params = {k: v for k, v in config.items() if isinstance(v, str | int | float)}
     params["query"] = urllib.parse.quote_plus(query)
+    # {query_slug}: "kia ev9 land" -> "kia-ev9-land" for path-style searches
+    params["query_slug"] = re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")
     url = config["url"].format(**params)
     if kind in BROWSER_KINDS:
         cookies = os.environ.get(config["cookies_env"]) if config.get("cookies_env") else None

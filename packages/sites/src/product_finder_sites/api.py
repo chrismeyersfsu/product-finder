@@ -7,7 +7,11 @@ rely on: each fetcher returns (body, url) or raises FetchError — a
 missing credential raises a clear "<ENV_VAR> unset" FetchError so
 run.py degrades to the next strategy instead of crashing.
 
-goodwill_api is keyless (ShopGoodwill's public buyer API).
+goodwill_api and autolist_api are keyless. autolist_api is Autolist's
+public JSON search (autolist.com/search — the endpoint its own SPA
+calls; CarGurus-owned, so its rows are CarGurus dealer inventory):
+free-text `keywords`, config zip/radius_mi/condition, 50 rows a page.
+Verified live from this network on 2026-09-02.
 Credentials: EBAY_CLIENT_ID + EBAY_CLIENT_SECRET (eBay Browse API,
 client-credentials OAuth), BESTBUY_API_KEY (Best Buy Products API),
 WALMART_API_KEY (Walmart affiliate API — best-effort: Walmart's
@@ -126,6 +130,25 @@ def fetch_goodwill_api(config: dict, query: str) -> tuple[str, str]:
     return resp, _GOODWILL_URL
 
 
+_AUTOLIST_URL = "https://www.autolist.com/search"
+
+
+def fetch_autolist_api(config: dict, query: str) -> tuple[str, str]:
+    """Autolist's keyless JSON search, scoped to config["radius_mi"]
+    miles of config["zip"] and config["condition"] ("used" by default;
+    "new" or omit for both)."""
+    params = {
+        "keywords": query,
+        "zip": config["zip"],
+        "radius": config.get("radius_mi", 100),
+        "limit": config.get("limit", 50),
+    }
+    if config.get("condition"):
+        params["condition"] = config["condition"]
+    url = _AUTOLIST_URL + "?" + urllib.parse.urlencode(params)
+    return fetch._get(url, headers={"Accept": "application/json"}), url
+
+
 _KROGER_TOKEN_URL = "https://api.kroger.com/v1/connect/oauth2/token"
 _KROGER_LOCATIONS_URL = "https://api.kroger.com/v1/locations"
 _KROGER_PRODUCTS_URL = "https://api.kroger.com/v1/products"
@@ -189,4 +212,5 @@ FETCHERS = {
     "walmart_api": fetch_walmart_api,
     "goodwill_api": fetch_goodwill_api,
     "kroger_api": fetch_kroger_api,
+    "autolist_api": fetch_autolist_api,
 }

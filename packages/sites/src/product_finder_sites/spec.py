@@ -1,4 +1,4 @@
-"""Built-in site registry: 24 marketplaces as pure data.
+"""Built-in site registry: 28 marketplaces as pure data.
 
 Owns the default site specs — nothing else. A site is
 {slug, name, kind, config}. kind "tiered" holds an ordered
@@ -63,6 +63,23 @@ only its browser_css tier is expected to work; its selectors WERE
 captured from a real headless render (tests/fixtures/aldi.html) — the
 visible price is split across spans, so the price selector targets the
 screen-reader-only "Current price: $6.45" span instead.
+
+Three dealer used-car sites, probed 2026-09-02. autolist (kind
+"autolist_api", flat) is autolist.com's own keyless JSON search — CarGurus's
+dealer inventory (Autolist is CarGurus-owned) — the one used-car search
+reachable without a browser; config: zip, radius_mi (100), condition
+("used"; drop it for new+used). cars-com (kind "carscom", browser-only:
+Cloudflare on plain HTTP, renders headless) takes a free-text `keyword`
+plus zip/maximum_distance; its parser reads each card's
+data-vehicle-details JSON. carvana (kind "carvana", browser-only,
+server-rendered) has no free-text search: its URL is a
+make-model[-trim] path built from {query_slug}, so a query that isn't
+a slug Carvana knows ("EV9 AWD") lands on a generic page with no
+vehicle JSON-LD and reports "no items parsed"; Carvana delivers
+nationwide, so its rows carry no location. Still walled even in a
+headless browser: autotrader, cargurus, carfax, truecar (captcha),
+carmax, edmunds, kbb (Akamai "Access Denied"); hemmings renders but is
+a classic-car site.
 """
 
 
@@ -363,6 +380,33 @@ _FLAT_SITES = [
             "region": "durham",
             "radius_km": 80,
             "cookies_env": "FB_COOKIES",
+        },
+    },
+    {
+        "slug": "autolist",
+        "name": "Autolist",
+        "kind": "autolist_api",
+        "config": {"zip": "27705", "radius_mi": 100, "condition": "used"},
+    },
+    {
+        "slug": "cars-com",
+        "name": "Cars.com",
+        "kind": "carscom",
+        "config": {
+            "url": "https://www.cars.com/shopping/results/?keyword={query}&zip={zip}"
+            "&maximum_distance={radius_mi}&stock_type=used&page_size=50",
+            "zip": "27705",
+            "radius_mi": 100,
+            "wait": "fuse-card[data-vehicle-details]",
+        },
+    },
+    {
+        "slug": "carvana",
+        "name": "Carvana",
+        "kind": "carvana",
+        "config": {
+            "url": "https://www.carvana.com/cars/{query_slug}",
+            "wait": "script[data-testid=vehicle-ld]",
         },
     },
     {
