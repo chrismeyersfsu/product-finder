@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS listings (
   score REAL,
   hard_fails TEXT NOT NULL DEFAULT '[]',
   distance_mi REAL,
+  unit_qty REAL,
+  unit TEXT,
+  unit_price REAL,
   first_seen TEXT NOT NULL,
   last_seen TEXT NOT NULL,
   UNIQUE(product_slug, url)
@@ -118,6 +121,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(listings)")}
     if "distance_mi" not in cols:
         conn.execute("ALTER TABLE listings ADD COLUMN distance_mi REAL")
+    if "unit_price" not in cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN unit_qty REAL")
+        conn.execute("ALTER TABLE listings ADD COLUMN unit TEXT")
+        conn.execute("ALTER TABLE listings ADD COLUMN unit_price REAL")
     conn.commit()
 
 
@@ -239,21 +246,28 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> int:
         "score": listing.get("score"),
         "hard_fails": json.dumps(listing.get("hard_fails", [])),
         "distance_mi": listing.get("distance_mi"),
+        "unit_qty": listing.get("unit_qty"),
+        "unit": listing.get("unit"),
+        "unit_price": listing.get("unit_price"),
         "now": now,
     }
     cur = conn.execute(
         """INSERT INTO listings (product_slug, site_slug, url, title, price, currency,
                                  condition, location, seller_rating, seller_feedback_count,
-                                 attrs, score, hard_fails, distance_mi, first_seen, last_seen)
+                                 attrs, score, hard_fails, distance_mi,
+                                 unit_qty, unit, unit_price, first_seen, last_seen)
            VALUES (:product_slug, :site_slug, :url, :title, :price, :currency,
                    :condition, :location, :seller_rating, :seller_feedback_count,
-                   :attrs, :score, :hard_fails, :distance_mi, :now, :now)
+                   :attrs, :score, :hard_fails, :distance_mi,
+                   :unit_qty, :unit, :unit_price, :now, :now)
            ON CONFLICT(product_slug, url) DO UPDATE SET
              title=excluded.title, price=excluded.price, condition=excluded.condition,
              location=excluded.location, seller_rating=excluded.seller_rating,
              seller_feedback_count=excluded.seller_feedback_count,
              attrs=excluded.attrs, score=excluded.score, hard_fails=excluded.hard_fails,
-             distance_mi=excluded.distance_mi, last_seen=excluded.last_seen""",
+             distance_mi=excluded.distance_mi, unit_qty=excluded.unit_qty,
+             unit=excluded.unit, unit_price=excluded.unit_price,
+             last_seen=excluded.last_seen""",
         row,
     )
     conn.commit()
@@ -262,6 +276,19 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> int:
 
 def set_listing_distance(conn: sqlite3.Connection, listing_id: int, distance_mi: float | None):
     conn.execute("UPDATE listings SET distance_mi=? WHERE id=?", (distance_mi, listing_id))
+
+
+def set_listing_units(conn: sqlite3.Connection, listing_id: int, units: dict) -> None:
+    """Store a units.unit_price() result ({unit_qty, unit, unit_price})."""
+    conn.execute(
+        "UPDATE listings SET unit_qty=?, unit=?, unit_price=? WHERE id=?",
+        (units.get("unit_qty"), units.get("unit"), units.get("unit_price"), listing_id),
+    )
+
+
+def listings_for_units(conn: sqlite3.Connection) -> list[dict]:
+    """(id, title, price) for every listing — the unit-price backfill set."""
+    return [dict(r) for r in conn.execute("SELECT id, title, price FROM listings")]
 
 
 def listings_with_location(conn: sqlite3.Connection) -> list[dict]:

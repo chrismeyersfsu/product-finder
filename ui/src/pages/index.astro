@@ -7,7 +7,7 @@ import StatTile from "../components/StatTile.astro";
 import Layout from "../layouts/Layout.astro";
 import { siteVar } from "../lib/colors";
 import * as db from "../lib/db";
-import { day, money, moneyCents } from "../lib/format";
+import { day, money, moneyCents, perUnit } from "../lib/format";
 
 const products = db.listProducts();
 const url = Astro.url;
@@ -70,12 +70,14 @@ const nSites = new Set(rows.map((r) => r.site_slug)).size;
         <EmptyState what={`listings for ${product.name}`} tool={`run_search("${productSlug}")`} />
       ) : (
         <div class="card">
-          <h2>Best deals <span class="sub">— sorted by score, then price</span></h2>
+          <h2>Best deals <span class="sub">— sorted by score, then price; click $/unit to sort by price per ounce</span></h2>
           <div class="wrap-x">
             <table class="data" data-sortable>
               <thead>
                 <tr>
-                  <th>Listing</th><th>Site</th><th class="num">Price</th><th class="num">vs median</th>
+                  <th>Listing</th><th>Site</th><th class="num">Price</th>
+                  <th class="num" title="Price per ounce (weight or fluid), or per count when the pack size has no weight; from the listing title">$/unit</th>
+                  <th class="num">vs median</th>
                   <th class="num" aria-sort="descending">Score</th><th class="num" title={homeHint ? `Miles from ${homeHint}` : "Miles from home"}>≈ mi</th>
                   <th>Condition</th><th class="num">Seller</th><th>Last seen</th>
                 </tr>
@@ -88,6 +90,7 @@ const nSites = new Set(rows.map((r) => r.site_slug)).size;
                     </td>
                     <td><span class="swatch" style={`background:${siteVar(r.site_slug, knownSites)}`}></span>{r.site_slug}</td>
                     <td class="num">{moneyCents(r.price)}</td>
+                    <td class="num">{perUnit(r.unit_price, r.unit)}</td>
                     <td class="num">{r.pct_vs_median == null ? "—" : `${r.pct_vs_median > 0 ? "+" : ""}${r.pct_vs_median}%`}</td>
                     <td class="num">{r.score == null ? "—" : r.score.toFixed(2)}</td>
                     <td class="num">{r.distance_mi == null ? "—" : r.distance_mi.toFixed(0)}</td>

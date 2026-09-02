@@ -17,7 +17,7 @@ from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 from product_finder_backtest import engine
-from product_finder_core import scoring, storage
+from product_finder_core import scoring, storage, units
 from product_finder_core import seed as seed_mod
 from product_finder_geo import geo
 from product_finder_sites import run as run_mod
@@ -174,6 +174,21 @@ def backfill_distances() -> dict:
     return {"updated": updated, "unknown_location": unknown}
 
 
+def backfill_unit_prices() -> dict:
+    """Recompute {unit_qty, unit, unit_price} for every stored listing from
+    its title and price — for listings ingested before unit pricing
+    existed, or after units.py's parser improves."""
+    conn = _connect()
+    n = priced = 0
+    for row in storage.listings_for_units(conn):
+        u = units.unit_price(row["price"], row["title"])
+        storage.set_listing_units(conn, row["id"], u)
+        n += 1
+        priced += u["unit_price"] is not None
+    conn.commit()
+    return {"listings": n, "with_unit_price": priced}
+
+
 def run_search(product_slug: str, sites: list[str] | None = None, query: str | None = None) -> dict:
     """Search enabled sites for a product's queries; score and store results.
 
@@ -215,6 +230,7 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
                 "score": round(score, 3),
                 "hard_fails": hard_fails,
                 "distance_mi": cache.distance_mi(home, li.get("location")) if cache else None,
+                **units.unit_price(li.get("price"), li["title"]),
             },
         )
         if li.get("price"):
@@ -472,6 +488,7 @@ TOOLS = [
     set_home,
     get_home,
     backfill_distances,
+    backfill_unit_prices,
     seed_defaults,
     backfill_ebay_sold,
     add_price_observation,

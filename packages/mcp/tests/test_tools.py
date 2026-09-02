@@ -132,7 +132,7 @@ def test_project_tools_scoped_to_root(tmp_path, monkeypatch):
 
 
 def test_tools_registered():
-    assert len(server.TOOLS) == 24
+    assert len(server.TOOLS) == 25
 
 
 def test_home_and_distances(monkeypatch):
@@ -184,3 +184,23 @@ def test_run_search_stores_distance_when_home_set(monkeypatch):
     # ebay rows carry no city, so distance stays unknown rather than wrong.
     assert all(r["distance_mi"] is None for r in rows)
     assert server.query_listings("thin-client-laptop", max_distance_mi=50) == []
+
+
+def test_run_search_stores_unit_price_and_backfills(monkeypatch):
+    server.seed_defaults()
+    server.add_product(slug="shakes", name="Shakes", queries=["shake"])
+    body = (FIXTURES / "aldi.html").read_text()
+    monkeypatch.setattr(
+        fetch, "_get_browser", lambda url, wait=None, timeout=30.0, cookies=None: body
+    )
+    summary = server.run_search("shakes", sites=["aldi"])
+    assert summary["per_site"] == {"aldi": 3}
+    rows = {r["title"]: r for r in server.query_listings("shakes")}
+    r = rows["Elevation Vanilla Ready to Drink Protein Shake, 4 x 11 fl oz"]
+    assert (r["unit_qty"], r["unit"], r["unit_price"]) == (44.0, "oz", 0.1466)
+
+    conn = server._connect()
+    conn.execute("UPDATE listings SET unit_price=NULL, unit=NULL, unit_qty=NULL")
+    conn.commit()
+    assert server.backfill_unit_prices() == {"listings": 3, "with_unit_price": 3}
+    assert server.query_listings("shakes")[0]["unit_price"] is not None

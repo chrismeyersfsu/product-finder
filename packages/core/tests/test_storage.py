@@ -120,3 +120,15 @@ def test_migrate_adds_distance_column_to_old_db(tmp_path):
         conn, {"product_slug": "w", "site_slug": "fb", "url": "u", "distance_mi": 1}
     )
     assert storage.listings_with_location(conn) == []
+
+
+def test_listing_unit_price_columns(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_product(conn, {"slug": "w"})
+    li = {"product_slug": "w", "site_slug": "aldi", "url": "http://x/3", "price": 6.45}
+    lid = storage.upsert_listing(conn, {**li, "unit_qty": 44.0, "unit": "oz", "unit_price": 0.1466})
+    row = storage.query_listings(conn, "w")[0]
+    assert (row["unit_qty"], row["unit"], row["unit_price"]) == (44.0, "oz", 0.1466)
+    storage.set_listing_units(conn, lid, {"unit_qty": 12.0, "unit": "ct", "unit_price": 0.5375})
+    assert storage.query_listings(conn, "w")[0]["unit"] == "ct"
+    assert storage.listings_for_units(conn) == [{"id": lid, "title": "", "price": 6.45}]

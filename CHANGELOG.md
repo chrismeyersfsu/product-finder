@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0 — 2026-09-02
+
+- Price per unit. core's new `units.py` reads the pack size out of a
+  listing title ("4 x 11 fl oz", "12 ct / 11 fl oz", "22 count,
+  17.6 oz", "2 lb", "750 ml") and normalizes weight and volume to
+  ounces, falling back to a count ("12 ct") when there is no
+  weight; ingest stores `unit_qty`/`unit`/`unit_price` on every
+  listing, and `backfill_unit_prices()` recomputes them for existing
+  rows. Gram figures next to "protein"/"fiber"/"sugar" and uppercase
+  "G" glued to a number ("256G", "4G") are not read as weights.
+- Deals page: a sortable `$/unit` column ("$0.147/oz", "$2.50/ct")
+  next to Price — click it to rank by price per ounce.
+
 ## 0.12.0 — 2026-09-02
 
 - `aldi` site: aldi.us's Instacart storefront rendered on the browser

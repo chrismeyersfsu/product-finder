@@ -30,6 +30,9 @@ export interface Listing {
   score: number | null;
   hard_fails: string[];
   distance_mi: number | null;
+  unit_qty: number | null;
+  unit: "oz" | "ct" | null;
+  unit_price: number | null;
   last_seen: string;
   median_price?: number;
   pct_vs_median?: number;
