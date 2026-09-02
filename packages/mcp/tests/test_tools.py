@@ -132,4 +132,55 @@ def test_project_tools_scoped_to_root(tmp_path, monkeypatch):
 
 
 def test_tools_registered():
-    assert len(server.TOOLS) == 21
+    assert len(server.TOOLS) == 24
+
+
+def test_home_and_distances(monkeypatch):
+    from product_finder_core import storage
+    from product_finder_geo import geo
+
+    # Street addresses are not in the gazetteer; fake the Nominatim seam.
+    monkeypatch.setattr(
+        geo, "_get", lambda url, timeout=15.0: (FIXTURES / "nominatim_home.json").read_text()
+    )
+    assert server.get_home() == {}
+    assert server.backfill_distances()["error"].startswith("no home")
+
+    home = server.set_home("2409 Tampa Ave, Durham, NC 27705")
+    assert round(home["lat"], 2) == 36.02 and round(home["lon"], 2) == -78.94
+    assert server.get_home()["address"].endswith("27705")
+
+    server.seed_defaults()
+    conn = server._connect()
+    base = {"product_slug": "thin-client-laptop", "site_slug": "facebook", "score": 0.9}
+    storage.upsert_listing(conn, {**base, "url": "fb://1", "location": "Chapel Hill, NC"})
+    storage.upsert_listing(conn, {**base, "url": "fb://2", "location": "Charlotte, NC"})
+    storage.upsert_listing(conn, {**base, "url": "fb://3"})
+    conn.commit()
+
+    assert server.backfill_distances() == {"updated": 2, "unknown_location": 0}
+    near = server.query_listings("thin-client-laptop", max_distance_mi=25)
+    assert [r["url"] for r in near] == ["fb://1"]
+    assert 5 < near[0]["distance_mi"] < 15
+    assert len(server.query_listings("thin-client-laptop")) == 3
+    assert len(server.best_deals("thin-client-laptop", max_distance_mi=25)["deals"]) == 1
+
+
+def test_run_search_stores_distance_when_home_set(monkeypatch):
+    from product_finder_geo import geo
+
+    monkeypatch.setattr(
+        geo, "_get", lambda url, timeout=15.0: '[{"lat": "36.02", "lon": "-78.94"}]'
+    )
+    server.set_home("2409 Tampa Ave, Durham, NC 27705")
+    server.seed_defaults()
+    monkeypatch.setattr(
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0, cookies=None: (FIXTURES / "ebay.html").read_text(),
+    )
+    server.run_search("thin-client-laptop", sites=["ebay"], query="x1 carbon")
+    rows = server.query_listings("thin-client-laptop")
+    # ebay rows carry no city, so distance stays unknown rather than wrong.
+    assert all(r["distance_mi"] is None for r in rows)
+    assert server.query_listings("thin-client-laptop", max_distance_mi=50) == []

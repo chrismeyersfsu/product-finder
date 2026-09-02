@@ -11,6 +11,7 @@ members = [
     "product-finder-backtest",
     "product-finder-browser",
     "product-finder-core",
+    "product-finder-geo",
     "product-finder-mcp",
     "product-finder-sites",
 ]
@@ -516,6 +517,21 @@ dev = [
 dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
+name = "product-finder-geo"
+version = "0.1.0"
+source = { editable = "packages/geo" }
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8" }]
+
+[[package]]
 name = "product-finder-mcp"
 version = "0.1.0"
 source = { editable = "packages/mcp" }
@@ -523,6 +539,7 @@ dependencies = [
     { name = "mcp" },
     { name = "product-finder-backtest" },
     { name = "product-finder-core" },
+    { name = "product-finder-geo" },
     { name = "product-finder-sites" },
 ]
 
@@ -542,6 +559,7 @@ requires-dist = [
     { name = "product-finder-backtest", editable = "packages/backtest" },
     { name = "product-finder-browser", marker = "extra == 'browser'", editable = "packages/browser" },
     { name = "product-finder-core", editable = "packages/core" },
+    { name = "product-finder-geo", editable = "packages/geo" },
     { name = "product-finder-sites", editable = "packages/sites" },
 ]
 provides-extras = ["browser"]

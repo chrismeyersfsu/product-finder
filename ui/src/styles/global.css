@@ -91,6 +91,8 @@ form.filters input, form.filters select {
   border: 1px solid var(--baseline); border-radius: 6px; padding: 5px 8px; font: inherit;
 }
 form.filters .chk { flex-direction: row; align-items: center; gap: 6px; padding-bottom: 7px; }
+form.filters .hint { color: var(--text-muted); }
+form.filters input:disabled { opacity: 0.5; cursor: not-allowed; }
 form.filters button {
   background: var(--accent); color: #fff; border: 0; border-radius: 6px;
   padding: 7px 14px; font: inherit; cursor: pointer;

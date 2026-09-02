@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.11.0 — 2026-09-01
+
+- Distance from home. `set_home(address)` geocodes an address and
+  stores it (new `settings` table); every listing with a location
+  (Facebook, Craigslist, OfferUp…) gets a `distance_mi` — computed at
+  ingest in `run_search`, and for existing rows via the new
+  `backfill_distances()` tool. `get_home()` shows what is set.
+- `query_listings` and `best_deals` take `max_distance_mi`; listings
+  with no known location are excluded when it is set, never assumed
+  near.
+- UI: an "≈ mi" sortable column on the deals table and the history
+  table view, and a "Within __ mi" filter (`?within=25`) on both pages.
+  The filter is off by default, labelled with the home zip only, and
+  disabled until a home is set.
+- New `packages/geo` (`product-finder-geo`): Nominatim geocoding behind
+  a `_get` seam (≥1 s between live calls, per usage policy), a built-in
+  gazetteer of ~26 NC cities so Triangle listings never hit the
+  network, a `geocache` table so each distinct city is looked up once
+  (misses included), and a pure `haversine_mi`.
+- `listings.distance_mi` is added by `_migrate()` on older databases;
+  re-seen listings now refresh `location` too.
+
 ## 0.10.0 — 2026-09-01
 
 - Bonanza prices parse (the price is an `a.item_price` with the

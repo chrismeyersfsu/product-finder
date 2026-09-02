@@ -1,7 +1,8 @@
 """SQLite persistence for products, sites, and listings.
 
 Owns the schema, connections, and all SQL — including the append-only
-price_history observations and stored backtest results. Never does network I/O and
+price_history observations, stored backtest results, and the key/value
+settings table (home location). Never does network I/O and
 never interprets criteria (scoring.py owns that). Callers rely on:
 JSON-typed columns are always valid JSON, `connect()` returns rows as
 sqlite3.Row, and upsert_listing() keys on (product_slug, url) so
@@ -51,9 +52,14 @@ CREATE TABLE IF NOT EXISTS listings (
   attrs TEXT NOT NULL DEFAULT '{}',
   score REAL,
   hard_fails TEXT NOT NULL DEFAULT '[]',
+  distance_mi REAL,
   first_seen TEXT NOT NULL,
   last_seen TEXT NOT NULL,
   UNIQUE(product_slug, url)
+);
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS search_runs (
   id INTEGER PRIMARY KEY,
@@ -109,7 +115,25 @@ def _migrate(conn: sqlite3.Connection) -> None:
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(products)")}
     if "sites" not in cols:
         conn.execute("ALTER TABLE products ADD COLUMN sites TEXT NOT NULL DEFAULT '[]'")
-        conn.commit()
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(listings)")}
+    if "distance_mi" not in cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN distance_mi REAL")
+    conn.commit()
+
+
+def get_setting(conn: sqlite3.Connection, key: str, default=None):
+    """JSON-typed key/value settings (home location, etc.)."""
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return json.loads(row["value"]) if row else default
+
+
+def set_setting(conn: sqlite3.Connection, key: str, value) -> None:
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?)"
+        " ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (key, json.dumps(value)),
+    )
+    conn.commit()
 
 
 def _row_to_product(row: sqlite3.Row) -> dict:
@@ -214,25 +238,39 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> int:
         "attrs": json.dumps(listing.get("attrs", {})),
         "score": listing.get("score"),
         "hard_fails": json.dumps(listing.get("hard_fails", [])),
+        "distance_mi": listing.get("distance_mi"),
         "now": now,
     }
     cur = conn.execute(
         """INSERT INTO listings (product_slug, site_slug, url, title, price, currency,
                                  condition, location, seller_rating, seller_feedback_count,
-                                 attrs, score, hard_fails, first_seen, last_seen)
+                                 attrs, score, hard_fails, distance_mi, first_seen, last_seen)
            VALUES (:product_slug, :site_slug, :url, :title, :price, :currency,
                    :condition, :location, :seller_rating, :seller_feedback_count,
-                   :attrs, :score, :hard_fails, :now, :now)
+                   :attrs, :score, :hard_fails, :distance_mi, :now, :now)
            ON CONFLICT(product_slug, url) DO UPDATE SET
              title=excluded.title, price=excluded.price, condition=excluded.condition,
-             seller_rating=excluded.seller_rating,
+             location=excluded.location, seller_rating=excluded.seller_rating,
              seller_feedback_count=excluded.seller_feedback_count,
              attrs=excluded.attrs, score=excluded.score, hard_fails=excluded.hard_fails,
-             last_seen=excluded.last_seen""",
+             distance_mi=excluded.distance_mi, last_seen=excluded.last_seen""",
         row,
     )
     conn.commit()
     return cur.lastrowid
+
+
+def set_listing_distance(conn: sqlite3.Connection, listing_id: int, distance_mi: float | None):
+    conn.execute("UPDATE listings SET distance_mi=? WHERE id=?", (distance_mi, listing_id))
+
+
+def listings_with_location(conn: sqlite3.Connection) -> list[dict]:
+    """(id, location) for every listing that has a location string — the
+    backfill set for distance recomputation."""
+    rows = conn.execute(
+        "SELECT id, location FROM listings WHERE location IS NOT NULL AND location != ''"
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def query_listings(
@@ -243,7 +281,10 @@ def query_listings(
     site_slug: str | None = None,
     include_hard_fails: bool = False,
     limit: int = 50,
+    max_distance_mi: float | None = None,
 ) -> list[dict]:
+    """max_distance_mi drops rows with unknown distance: a listing with no
+    location can't claim to be nearby (they still show when no cap is set)."""
     sql = "SELECT * FROM listings WHERE product_slug=?"
     args: list = [product_slug]
     if min_score is not None:
@@ -255,6 +296,9 @@ def query_listings(
     if site_slug:
         sql += " AND site_slug=?"
         args.append(site_slug)
+    if max_distance_mi is not None:
+        sql += " AND distance_mi IS NOT NULL AND distance_mi <= ?"
+        args.append(max_distance_mi)
     if not include_hard_fails:
         sql += " AND hard_fails = '[]'"
     sql += " ORDER BY score DESC NULLS LAST, price ASC NULLS LAST LIMIT ?"

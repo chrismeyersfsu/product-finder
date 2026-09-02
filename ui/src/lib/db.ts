@@ -29,6 +29,7 @@ export interface Listing {
   seller_feedback_count: number | null;
   score: number | null;
   hard_fails: string[];
+  distance_mi: number | null;
   last_seen: string;
   median_price?: number;
   pct_vs_median?: number;
@@ -41,6 +42,7 @@ export interface Observation {
   score: number | null;
   kind: string;
   observed_at: string;
+  distance_mi: number | null;
 }
 export interface BacktestRow {
   id: number;
@@ -71,6 +73,8 @@ export interface DealFilters {
   sites?: string[];
   includeHardFails?: boolean;
   limit?: number;
+  /** Miles from home; rows with no known distance are dropped when set. */
+  maxDistance?: number;
 }
 
 function dbPath(): string | null {
@@ -130,6 +134,7 @@ export function deals(productSlug: string, f: DealFilters = {}): Listing[] {
       args.push(...f.sites);
     }
     if (!f.includeHardFails) sql += " AND hard_fails = '[]'";
+    if (f.maxDistance != null) { sql += " AND distance_mi IS NOT NULL AND distance_mi <= ?"; args.push(f.maxDistance); }
     sql += " ORDER BY score DESC NULLS LAST, price ASC NULLS LAST LIMIT ?";
     args.push(f.limit ?? 100);
     return db.prepare(sql).all(...args);
@@ -176,14 +181,33 @@ export function getBacktest(id: number): BacktestRow | null {
   });
 }
 
-export function history(productSlug: string, kind?: string): Observation[] {
+/** Observations don't carry a location; distance comes from the
+ *  matching listing (same product + url) when we still have it. */
+export function history(productSlug: string, kind?: string, maxDistance?: number): Observation[] {
   return withDb([] as Observation[], (db) => {
     let sql =
-      "SELECT site_slug, url, title, price, score, kind, observed_at FROM price_history WHERE product_slug = ?";
+      "SELECT h.site_slug, h.url, h.title, h.price, h.score, h.kind, h.observed_at, l.distance_mi" +
+      " FROM price_history h LEFT JOIN listings l ON l.product_slug = h.product_slug AND l.url = h.url" +
+      " WHERE h.product_slug = ?";
     const args: unknown[] = [productSlug];
-    if (kind) { sql += " AND kind = ?"; args.push(kind); }
-    sql += " ORDER BY observed_at";
+    if (kind) { sql += " AND h.kind = ?"; args.push(kind); }
+    if (maxDistance != null) { sql += " AND l.distance_mi IS NOT NULL AND l.distance_mi <= ?"; args.push(maxDistance); }
+    sql += " ORDER BY h.observed_at";
     return db.prepare(sql).all(...args) as Observation[];
+  });
+}
+
+/** Short label for where distances are measured from ("27705"), or null
+ *  when no home is set. Deliberately never the street address. */
+export function homeHint(): string | null {
+  return withDb(null as string | null, (db) => {
+    const r: any = db.prepare("SELECT value FROM settings WHERE key = 'home'").get();
+    if (!r) return null;
+    const address: string = JSON.parse(r.value)?.address ?? "";
+    const zip = address.match(/\b\d{5}\b(?!.*\b\d{5}\b)/)?.[0];
+    if (zip) return zip;
+    const parts = address.split(",").map((s) => s.trim()).filter(Boolean);
+    return parts.length > 1 ? parts.slice(-2).join(", ") : null;
   });
 }
 

@@ -1,8 +1,9 @@
 """MCP server: products, sites, searches, deals, backtests, and project self-modification.
 
 Owns the MCP app (MCPServer), tool functions, and orchestration of
-core (storage/scoring) + sites (fetch/parse). Never bypasses the
-fetch._get seam and never writes outside the project root. Callers
+core (storage/scoring) + sites (fetch/parse) + geo (distance from
+home). Never bypasses the fetch._get / geo._get seams and never writes
+outside the project root. Callers
 rely on: tools are plain functions (testable without a transport),
 $PF_DB picks the database at call time, and $PF_PROJECT_ROOT scopes
 the project_* tools.
@@ -18,6 +19,7 @@ from mcp.server.mcpserver import MCPServer
 from product_finder_backtest import engine
 from product_finder_core import scoring, storage
 from product_finder_core import seed as seed_mod
+from product_finder_geo import geo
 from product_finder_sites import run as run_mod
 from product_finder_sites.spec import BUILTIN_SITES, EBAY_SOLD
 
@@ -129,6 +131,49 @@ def _ensure_sites(conn) -> None:
             storage.upsert_site(conn, site)
 
 
+def _home(conn) -> tuple[float, float] | None:
+    home = storage.get_setting(conn, "home")
+    if home and home.get("lat") is not None and home.get("lon") is not None:
+        return (home["lat"], home["lon"])
+    return None
+
+
+def set_home(address: str) -> dict:
+    """Set the home address distances are measured from. Geocodes it
+    (Nominatim) and stores address + lat/lon; run backfill_distances
+    afterwards to fill in existing listings."""
+    hit = geo.geocode(address)
+    if not hit:
+        return {"error": f"could not geocode: {address!r}"}
+    conn = _connect()
+    home = {"address": address, "lat": hit[0], "lon": hit[1]}
+    storage.set_setting(conn, "home", home)
+    return home
+
+
+def get_home() -> dict:
+    """The stored home address and coordinates, or {} if unset."""
+    return storage.get_setting(_connect(), "home", {}) or {}
+
+
+def backfill_distances() -> dict:
+    """Recompute distance_mi for every listing that has a location
+    (city centroid to home, great-circle). Needs set_home first."""
+    conn = _connect()
+    home = _home(conn)
+    if not home:
+        return {"error": "no home set; call set_home(address) first"}
+    cache = geo.GeoCache(conn)
+    updated = unknown = 0
+    for row in storage.listings_with_location(conn):
+        d = cache.distance_mi(home, row["location"])
+        storage.set_listing_distance(conn, row["id"], d)
+        updated += d is not None
+        unknown += d is None
+    conn.commit()
+    return {"updated": updated, "unknown_location": unknown}
+
+
 def run_search(product_slug: str, sites: list[str] | None = None, query: str | None = None) -> dict:
     """Search enabled sites for a product's queries; score and store results.
 
@@ -150,6 +195,8 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
         return {"error": "product has no queries; pass query= or update the product"}
 
     result = run_mod.search_many(site_rows, queries)
+    home = _home(conn)
+    cache = geo.GeoCache(conn) if home else None
     counts: dict[str, int] = {}
     rejected = 0
     for li in result["listings"]:
@@ -167,6 +214,7 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
                 "attrs": attrs,
                 "score": round(score, 3),
                 "hard_fails": hard_fails,
+                "distance_mi": cache.distance_mi(home, li.get("location")) if cache else None,
             },
         )
         if li.get("price"):
@@ -200,8 +248,11 @@ def query_listings(
     site: str | None = None,
     limit: int = 25,
     include_hard_fails: bool = False,
+    max_distance_mi: float | None = None,
 ) -> list[dict]:
-    """Query stored listings, best score first then cheapest."""
+    """Query stored listings, best score first then cheapest.
+    max_distance_mi keeps only listings within that many miles of home
+    (listings with no known location are excluded when it is set)."""
     return storage.query_listings(
         _connect(),
         product_slug,
@@ -210,17 +261,19 @@ def query_listings(
         site_slug=site,
         include_hard_fails=include_hard_fails,
         limit=limit,
+        max_distance_mi=max_distance_mi,
     )
 
 
-def best_deals(product_slug: str, limit: int = 10) -> dict:
+def best_deals(product_slug: str, limit: int = 10, max_distance_mi: float | None = None) -> dict:
     """Top-scored listings with price-vs-median context, plus the
-    product's manual checks to verify before buying."""
+    product's manual checks to verify before buying. max_distance_mi
+    restricts to listings within that many miles of home."""
     conn = _connect()
     product = storage.get_product(conn, product_slug)
     if not product:
         return {"error": f"no product: {product_slug}"}
-    rows = storage.query_listings(conn, product_slug, limit=200)
+    rows = storage.query_listings(conn, product_slug, limit=200, max_distance_mi=max_distance_mi)
     scoring.annotate_deals(rows)
     return {"deals": rows[:limit], "manual_checks": product["manual_checks"]}
 
@@ -416,6 +469,9 @@ TOOLS = [
     run_search,
     query_listings,
     best_deals,
+    set_home,
+    get_home,
+    backfill_distances,
     seed_defaults,
     backfill_ebay_sold,
     add_price_observation,

@@ -17,11 +17,14 @@ const minScore = url.searchParams.get("min_score");
 const maxPrice = url.searchParams.get("max_price");
 const selectedSites = (url.searchParams.get("sites") ?? "").split(",").filter(Boolean);
 const includeHardFails = url.searchParams.get("hard_fails") === "1";
+const within = url.searchParams.get("within");
+const homeHint = db.homeHint();
 const filters: db.DealFilters = {
   minScore: minScore ? Number(minScore) : undefined,
   maxPrice: maxPrice ? Number(maxPrice) : undefined,
   sites: selectedSites.length ? selectedSites : undefined,
   includeHardFails,
+  maxDistance: within ? Number(within) : undefined,
 };
 const rows = product ? db.deals(productSlug, filters) : [];
 const sites = product ? db.listingSites(productSlug) : [];
@@ -46,6 +49,10 @@ const nSites = new Set(rows.map((r) => r.site_slug)).size;
       <input type="number" name="max_price" min="0" step="10" value={maxPrice ?? ""} placeholder="any" />
     </label>
     <SiteMultiSelect options={sites} selected={selectedSites} />
+    <label title={homeHint ? `Miles from home (${homeHint}); listings with no known location are hidden when set` : "Set a home address with set_home(address) to enable"}>
+      Within{homeHint && <span class="hint"> of {homeHint}</span>}
+      <input type="number" name="within" min="1" step="5" value={within ?? ""} placeholder="any mi" disabled={!homeHint} />
+    </label>
     <label class="chk"><input type="checkbox" name="hard_fails" value="1" checked={includeHardFails} /> include hard fails</label>
     <button type="submit">Apply</button>
   </form>
@@ -69,7 +76,8 @@ const nSites = new Set(rows.map((r) => r.site_slug)).size;
               <thead>
                 <tr>
                   <th>Listing</th><th>Site</th><th class="num">Price</th><th class="num">vs median</th>
-                  <th class="num" aria-sort="descending">Score</th><th>Condition</th><th class="num">Seller</th><th>Last seen</th>
+                  <th class="num" aria-sort="descending">Score</th><th class="num" title={homeHint ? `Miles from ${homeHint}` : "Miles from home"}>≈ mi</th>
+                  <th>Condition</th><th class="num">Seller</th><th>Last seen</th>
                 </tr>
               </thead>
               <tbody>
@@ -82,6 +90,7 @@ const nSites = new Set(rows.map((r) => r.site_slug)).size;
                     <td class="num">{moneyCents(r.price)}</td>
                     <td class="num">{r.pct_vs_median == null ? "—" : `${r.pct_vs_median > 0 ? "+" : ""}${r.pct_vs_median}%`}</td>
                     <td class="num">{r.score == null ? "—" : r.score.toFixed(2)}</td>
+                    <td class="num">{r.distance_mi == null ? "—" : r.distance_mi.toFixed(0)}</td>
                     <td>{r.condition ?? "—"}</td>
                     <td class="num">{r.seller_rating != null ? `${r.seller_rating}%` : "—"}{r.seller_feedback_count != null ? ` (${r.seller_feedback_count.toLocaleString()})` : ""}</td>
                     <td>{day(r.last_seen)}</td>

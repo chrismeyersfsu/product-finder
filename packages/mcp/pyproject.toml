@@ -3,7 +3,13 @@ name = "product-finder-mcp"
 version = "0.1.0"
 description = "MCP server: manage products, run searches, query deals, modify this project"
 requires-python = ">=3.12"
-dependencies = ["mcp>=2", "product-finder-core", "product-finder-sites", "product-finder-backtest"]
+dependencies = [
+    "mcp>=2",
+    "product-finder-core",
+    "product-finder-sites",
+    "product-finder-backtest",
+    "product-finder-geo",
+]
 
 [project.optional-dependencies]
 browser = ["product-finder-browser"]
@@ -19,6 +25,7 @@ dev = ["pytest>=8"]
 product-finder-core = { workspace = true }
 product-finder-sites = { workspace = true }
 product-finder-backtest = { workspace = true }
+product-finder-geo = { workspace = true }
 product-finder-browser = { workspace = true }
 
 [build-system]
