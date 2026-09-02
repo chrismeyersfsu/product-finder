@@ -44,7 +44,7 @@ parse.py's css/kroger_api handling of those two keys) rather than a
 per-card selector — a store's shelf listings have one fixed address,
 unlike a marketplace card. harris-teeter is a Kroger banner: its api
 tier (kroger_api, KROGER_CLIENT_ID/KROGER_CLIENT_SECRET) resolves the
-nearest HARRISTEETER location to config["zip"] live and is the only
+config["location_id"] store (else nearest HART store to config["zip"]) and is the only
 tier expected to work — harristeeter.com itself resets *both* plain
 HTTP and a real headless-browser connection from this network
 (ERR_HTTP2_PROTOCOL_ERROR, the same Akamai wall as staples), so its
@@ -307,7 +307,8 @@ _FLAT_SITES = [
         location="Harris Teeter, 2107 Hillsborough Rd, Durham, NC 27705",
         condition="new",
         zip="27705",
-        chain="HARRISTEETER",
+        chain="HART",  # Kroger banner code for Harris Teeter (/v1/chains)
+        location_id="09700394",  # Shops at Erwin Mill, 2107 Hillsborough Rd
         site_url="https://www.harristeeter.com",
         wait="div.ProductCard",
     ),

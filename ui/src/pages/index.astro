@@ -51,7 +51,7 @@ const nSites = new Set(rows.map((r) => r.site_slug)).size;
     <SiteMultiSelect options={sites} selected={selectedSites} />
     <label title={homeHint ? `Miles from home (${homeHint}); listings with no known location are hidden when set` : "Set a home address with set_home(address) to enable"}>
       Within{homeHint && <span class="hint"> of {homeHint}</span>}
-      <input type="number" name="within" min="1" step="5" value={within ?? ""} placeholder="any mi" disabled={!homeHint} />
+      <input type="number" name="within" min="1" step="any" inputmode="numeric" value={within ?? ""} placeholder="any mi" disabled={!homeHint} />
     </label>
     <label class="chk"><input type="checkbox" name="hard_fails" value="1" checked={includeHardFails} /> include hard fails</label>
     <button type="submit">Apply</button>

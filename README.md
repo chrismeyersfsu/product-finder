@@ -55,6 +55,10 @@ and why the others didn't (`errors`):
    `walmart_api` (`WALMART_API_KEY`, best-effort), and Reddit's public
    JSON. Missing credentials degrade gracefully: the site records a
    clear "<VAR> unset" error and falls to the next tier.
+   `kroger_api` (`KROGER_CLIENT_ID` + `KROGER_CLIENT_SECRET`) serves
+   Harris Teeter. Deployed containers read all of these from
+   `~/.config/product-finder/secrets.env` (mode 600, created by
+   `infra/systemd/install.sh`, never committed).
 2. **Plain HTML** (`css`) — one urllib seam, pure bs4 parsers.
 3. **Browser** (`browser_css`) — Playwright/Chromium renders the page,
    same CSS selectors; the fallback tier for the JS-heavy sites

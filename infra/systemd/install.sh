@@ -56,6 +56,28 @@ if [[ ! -f "$REPO/data/product_finder.db" && -f "$REPO/product_finder.db" ]]; th
     echo "migrated repo-root db into data/"
 fi
 
+echo "== secrets =="
+# Site API keys are read by the scrape and mcp containers from this
+# EnvironmentFile; never committed. Created empty with a template so the
+# operator only has to fill in values.
+SECRETS="$HOME/.config/product-finder/secrets.env"
+if [[ ! -f "$SECRETS" ]]; then
+    mkdir -p "$(dirname "$SECRETS")"
+    (umask 177 && cat > "$SECRETS" <<'TPL'
+# product-finder site API keys — KEY=value, one per line, no quotes.
+# EBAY_CLIENT_ID=
+# EBAY_CLIENT_SECRET=
+# KROGER_CLIENT_ID=
+# KROGER_CLIENT_SECRET=
+# BESTBUY_API_KEY=
+# WALMART_API_KEY=
+# FB_COOKIES=
+TPL
+    )
+    echo "created $SECRETS (fill in API keys, then rerun)"
+fi
+chmod 600 "$SECRETS"
+
 echo "== cloudflare tunnel =="
 if [[ ! -f "$HOME/.cloudflared/product-finder.yml" ]]; then
     cat > "$HOME/.cloudflared/product-finder.yml" <<CFG

@@ -69,7 +69,8 @@ def test_harris_teeter_kroger_config():
     ht = SITES["harris-teeter"]
     kroger = next(s for s in _strategies(ht) if s["kind"] == "kroger_api")
     assert kroger["config"]["zip"] == "27705"
-    assert kroger["config"]["chain"] == "HARRISTEETER"
+    assert kroger["config"]["chain"] == "HART"
+    assert kroger["config"]["location_id"] == "09700394"
     assert kroger["config"]["condition"] == "new"
     assert "Durham, NC" in kroger["config"]["location"]
 

@@ -54,7 +54,7 @@ const sold = obs.filter((o) => o.kind === "sold").length;
     </label>
     <label title={homeHint ? `Miles from home (${homeHint}); observations whose listing has no known location are hidden when set` : "Set a home address with set_home(address) to enable"}>
       Within{homeHint && <span class="hint"> of {homeHint}</span>}
-      <input type="number" name="within" min="1" step="5" value={within ?? ""} placeholder="any mi" disabled={!homeHint} />
+      <input type="number" name="within" min="1" step="any" inputmode="numeric" value={within ?? ""} placeholder="any mi" disabled={!homeHint} />
     </label>
     <button type="submit">Apply</button>
   </form>

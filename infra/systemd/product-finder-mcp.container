@@ -14,6 +14,9 @@ Volume=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data:/home/cmeyers
 # working tree, not the image's baked-in copy.
 Volume=/home/cmeyers/github.com/chrismeyersfsu/product-finder:/home/cmeyers/github.com/chrismeyersfsu/product-finder:Z
 Environment=PF_DB=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data/product_finder.db
+# API keys (EBAY_*, KROGER_*, BESTBUY_API_KEY, FB_COOKIES...) live outside git;
+# install.sh creates the file mode 600 if missing. Leading - = optional.
+EnvironmentFile=-%h/.config/product-finder/secrets.env
 Environment=PF_PROJECT_ROOT=/home/cmeyers/github.com/chrismeyersfsu/product-finder
 Exec=product-finder-mcp --transport streamable-http --host 127.0.0.1 --port 8848
 

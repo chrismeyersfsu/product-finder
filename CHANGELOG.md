@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.2 — 2026-09-02
+
+- Scrape and mcp containers read site API keys from
+  `~/.config/product-finder/secrets.env` (`EnvironmentFile`, mode 600,
+  templated by install.sh). Kroger credentials there turn on the
+  Harris Teeter tier.
+- Harris Teeter tier verified live: Kroger's banner code is `HART`
+  (not `HARRISTEETER`), the Erwin Mill store (id 09700394) is pinned
+  via `config["location_id"]`, and the zip lookup skips fuel centers.
+- "Within __ mi" input accepted only 1, 6, 11… (`step="5"` on top of
+  `min="1"`); any whole number works now.
+
 ## 0.11.1 — 2026-09-01
 
 - Two local grocery sites added: `harris-teeter` and `food-lion`, each

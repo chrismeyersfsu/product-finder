@@ -146,24 +146,30 @@ def _kroger_token() -> str:
 
 
 def _kroger_location_id(config: dict, headers: dict) -> str:
+    """config["location_id"] pins a store outright; otherwise the nearest
+    non-fuel store of config["chain"] (Kroger's banner code, e.g. "HART"
+    for Harris Teeter) to config["zip"]."""
+    if config.get("location_id"):
+        return str(config["location_id"])
     url = (
         _KROGER_LOCATIONS_URL
         + "?filter.zipCode.near="
         + urllib.parse.quote_plus(config["zip"])
         + "&filter.chain="
         + urllib.parse.quote_plus(config["chain"])
-        + f"&filter.radiusInMiles={config.get('radius_miles', 15)}&filter.limit=1"
+        + f"&filter.radiusInMiles={config.get('radius_miles', 15)}&filter.limit=10"
     )
     body = fetch._get(url, headers=headers)
     try:
-        return json.loads(body)["data"][0]["locationId"]
+        stores = [s for s in json.loads(body)["data"] if "fuel" not in s.get("name", "").lower()]
+        return stores[0]["locationId"]
     except (ValueError, KeyError, IndexError) as e:
         raise fetch.FetchError(f"kroger: no {config['chain']} location near {config['zip']}") from e
 
 
 def fetch_kroger_api(config: dict, query: str) -> tuple[str, str]:
     """Kroger Products API, scoped to the store nearest `config['zip']` of
-    banner `config['chain']` (e.g. "HARRISTEETER"). Three HTTP calls behind
+    banner `config['chain']` (e.g. "HART"). Three HTTP calls behind
     one seam: token, then locations (resolves locationId), then products."""
     token = _kroger_token()
     headers = {"Authorization": f"Bearer {token}"}

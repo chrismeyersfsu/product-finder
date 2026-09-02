@@ -13,6 +13,9 @@ ContainerName=product-finder-scrape
 Network=host
 Volume=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data:/home/cmeyers/github.com/chrismeyersfsu/product-finder/data:Z
 Environment=PF_DB=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data/product_finder.db
+# API keys (EBAY_*, KROGER_*, BESTBUY_API_KEY, FB_COOKIES...) live outside git;
+# install.sh creates the file mode 600 if missing. Leading - = optional.
+EnvironmentFile=-%h/.config/product-finder/secrets.env
 Exec=product-finder-scrape
 
 [Service]

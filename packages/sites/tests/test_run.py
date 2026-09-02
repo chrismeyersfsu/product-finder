@@ -254,10 +254,8 @@ def test_kroger_api_tier_runs_when_creds_set(monkeypatch):
     def fake_get(url, headers=None, timeout=25.0):
         calls.append(("get", url))
         assert headers["Authorization"] == "Bearer tok"
-        if "locations" in url:
-            assert "filter.zipCode.near=27705" in url and "filter.chain=HARRISTEETER" in url
-            return '{"data": [{"locationId": "01600974"}]}'
-        assert "filter.locationId=01600974" in url and "filter.term=eggs" in url
+        assert "locations" not in url  # builtin pins location_id: no lookup call
+        assert "filter.locationId=09700394" in url and "filter.term=eggs" in url
         return (FIXTURES / "kroger_api.json").read_text()
 
     monkeypatch.setattr(fetch, "_post", fake_post)
@@ -265,12 +263,45 @@ def test_kroger_api_tier_runs_when_creds_set(monkeypatch):
     result = run.search_site(SITES["harris-teeter"], "eggs")
     assert result["error"] is None
     assert result["strategy"] == "kroger_api"
-    assert [c[0] for c in calls] == ["post", "get", "get"]
+    assert [c[0] for c in calls] == ["post", "get"]
     assert result["listings"][0]["price"] == 3.49
     assert (
         result["listings"][0]["location"] == "Harris Teeter, 2107 Hillsborough Rd, Durham, NC 27705"
     )
     assert result["listings"][0]["condition"] == "new"
+
+
+def _unpinned_harris_teeter():
+    """Builtin spec minus the pinned store, so the zip lookup path runs."""
+    import copy
+
+    site = copy.deepcopy(SITES["harris-teeter"])
+    for strat in site["config"]["strategies"]:
+        strat.get("config", {}).pop("location_id", None)
+    site["config"].pop("location_id", None)
+    return site
+
+
+def test_kroger_zip_lookup_skips_fuel_centers(monkeypatch):
+    monkeypatch.setenv("KROGER_CLIENT_ID", "cid")
+    monkeypatch.setenv("KROGER_CLIENT_SECRET", "secret")
+    monkeypatch.setattr(
+        fetch, "_post", lambda url, data, headers=None, timeout=25.0: '{"access_token": "tok"}'
+    )
+
+    def fake_get(url, headers=None, timeout=25.0):
+        if "locations" in url:
+            assert "filter.zipCode.near=27705" in url and "filter.chain=HART" in url
+            return (
+                '{"data": [{"locationId": "09700024", "name": "Harris Teeter Fuel - Hope Valley"},'
+                ' {"locationId": "09700394", "name": "Harris Teeter - Shops at Erwin Mill"}]}'
+            )
+        assert "filter.locationId=09700394" in url
+        return (FIXTURES / "kroger_api.json").read_text()
+
+    monkeypatch.setattr(fetch, "_get", fake_get)
+    result = run.search_site(_unpinned_harris_teeter(), "eggs")
+    assert result["error"] is None and result["strategy"] == "kroger_api"
 
 
 def test_kroger_no_location_near_zip_is_a_clear_error(monkeypatch):
@@ -283,8 +314,8 @@ def test_kroger_no_location_near_zip_is_a_clear_error(monkeypatch):
     monkeypatch.setattr(
         fetch, "_get_browser", lambda url, wait=None, timeout=30.0, cookies=None: ""
     )
-    result = run.search_site(SITES["harris-teeter"], "eggs")
-    assert result["attempts"][0]["error"] == "kroger: no HARRISTEETER location near 27705"
+    result = run.search_site(_unpinned_harris_teeter(), "eggs")
+    assert result["attempts"][0]["error"] == "kroger: no HART location near 27705"
 
 
 def test_food_lion_browser_wall_is_labeled_challenge_page(monkeypatch):
