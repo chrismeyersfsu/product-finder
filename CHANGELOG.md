@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.12.0 — 2026-09-02
+
+- `aldi` site: aldi.us's Instacart storefront rendered on the browser
+  tier (the only tier that works — plain HTTP 404s), Durham store
+  prices; selectors captured from a real render
+  (tests/fixtures/aldi.html), price read from the screen-reader
+  "Current price" span because the visible price is split across spans.
+- css sites take an optional `subtitle` selector folded into the title
+  (used for Aldi's "4 x 11 fl oz"), and `kroger_api` folds each item's
+  `size` ("12 ct / 11 fl oz") into the title the same way — real Kroger
+  descriptions omit pack size, so count/size extractors had nothing to
+  read.
+
 ## 0.11.2 — 2026-09-02
 
 - Scrape and mcp containers read site API keys from

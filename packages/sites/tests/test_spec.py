@@ -1,4 +1,4 @@
-"""Registry contract: 24 sites, unique slugs, ordered strategies, complete configs."""
+"""Registry contract: 25 sites, unique slugs, ordered strategies, complete configs."""
 
 from product_finder_sites.spec import BUILTIN_SITES, JS_HEAVY, NO_PLAIN_HTML
 
@@ -13,7 +13,7 @@ def _strategies(site):
 
 def test_twenty_four_sites_unique_slugs():
     slugs = [s["slug"] for s in BUILTIN_SITES]
-    assert len(slugs) == 24 and len(set(slugs)) == 24
+    assert len(slugs) == 25 and len(set(slugs)) == 25
 
 
 def test_facebook_marketplace_spec():

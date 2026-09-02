@@ -1,4 +1,4 @@
-"""Parsers for the two grocery sites (harris-teeter, food-lion).
+"""Parsers for the three grocery sites (harris-teeter, food-lion, aldi).
 
 Unlike test_parse_live_sites.py, the css/browser_css fixtures here are
 SYNTHETIC — harristeeter.com and foodlion.com wall this network at
@@ -8,7 +8,9 @@ condition pass-through, skip rules) against spec.py's guessed
 selectors. kroger_api.json mirrors Kroger's published Products API
 response shape (not independently curl-verified — no credentials).
 foodlion_walled.html is a REAL trimmed capture of the DataDome
-interstitial a headless browser gets back instead of results.
+interstitial a headless browser gets back instead of results, and
+aldi.html is a REAL trimmed capture of aldi.us's Instacart storefront
+rendered in a headless browser (the only tier that works for it).
 """
 
 from pathlib import Path
@@ -69,8 +71,8 @@ def test_kroger_api_json():
         "https://api.kroger.com",
         (FIXTURES / "kroger_api.json").read_text(),
     )
-    assert len(out) == 3
-    assert out[0]["title"] == "Kroger Grade A Large Eggs, 12 ct"
+    assert len(out) == 4
+    assert out[0]["title"] == "Kroger Grade A Large Eggs, 12 ct"  # size already in description
     assert out[0]["price"] == 3.49  # "regular", not the sometimes-0 "promo"
     assert out[0]["url"] == (
         "https://www.harristeeter.com/search?query=Kroger+Grade+A+Large+Eggs%2C+12+ct"
@@ -78,4 +80,23 @@ def test_kroger_api_json():
     assert out[0]["location"] == "Harris Teeter, 2107 Hillsborough Rd, Durham, NC 27705"
     assert out[0]["condition"] == "new"
     assert out[1]["price"] == 5.99
-    assert out[2]["price"] is None  # out-of-stock row: no `items` entries
+    # description omits the pack size; the item's `size` is folded in
+    assert out[2]["title"] == "Premier Protein Vanilla Protein Shake, 12 ct / 11 fl oz"
+    assert out[3]["price"] is None  # out-of-stock row: no `items` entries
+
+
+def test_aldi_browser_css():
+    out = _parse("aldi", "browser_css", "aldi.html", "https://www.aldi.us/store/aldi/s?k=x")
+    # pack size (the `subtitle` node after the name) is folded into the title
+    assert [o["title"] for o in out] == [
+        "Elevation Chocolate Ready to Drink Protein Shake, 4 x 11 fl oz",
+        "Elevation Vanilla Ready to Drink Protein Shake, 4 x 11 fl oz",
+        "Elevation Chocolate Flavored Ultra Filtered Milkshake \u2013 4 Pack, 11.5 fl oz, 4 x 11.5 fl oz",
+    ]
+    # price comes from the screen-reader span, not the "$" "6" "45" visible split
+    assert [o["price"] for o in out] == [6.45, 6.45, 8.79]
+    assert out[1]["url"] == (
+        "https://www.aldi.us/store/aldi/products/"
+        "21349273-elevation-ready-to-drink-vanilla-protein-shake-4-ct"
+    )
+    assert out[0]["location"].startswith("Aldi, ") and out[0]["condition"] == "new"

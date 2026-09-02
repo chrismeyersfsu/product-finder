@@ -17,6 +17,14 @@
       ]
     },
     {
+      "productId": "0001111087260",
+      "description": "Premier Protein Vanilla Protein Shake",
+      "brand": "Premier Protein",
+      "items": [
+        {"itemId": "0001111087260", "size": "12 ct / 11 fl oz", "price": {"regular": 33.99, "promo": 0}}
+      ]
+    },
+    {
       "productId": "0001111060911",
       "description": "no-item row (out of stock at this store)",
       "brand": "Kroger",

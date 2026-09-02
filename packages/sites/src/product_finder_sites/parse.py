@@ -92,6 +92,12 @@ def _parse_css(config: dict, page_url: str, body: str) -> list[dict]:
         href = link_node.get(config.get("link_attr", "href")) if link_node else None
         if not title or not href or title.lower() == "shop on ebay":
             continue
+        # Optional "subtitle" selector (pack size, variant) folded into the
+        # title so extractors see it — grocery cards keep size off the name.
+        sub_node = _sel(item, config["subtitle"]) if config.get("subtitle") else None
+        subtitle = sub_node.get_text(" ", strip=True) if sub_node else ""
+        if subtitle and subtitle.lower() not in title.lower():
+            title = f"{title}, {subtitle}"
         price_node = _sel(item, config["price"]) if config.get("price") else None
         if price_node is not None and config.get("price_attr"):
             price_node_text = str(price_node.get(config["price_attr"]) or "")
@@ -288,6 +294,12 @@ def _parse_kroger_api(config: dict, body: str) -> list[dict]:
         # active promotion" rather than omitting the field, which would
         # otherwise misread as a free item.
         price = entries[0].get("price", {}).get("regular") if entries else None
+        # Real Kroger descriptions omit pack size ("Premier Protein Vanilla
+        # Protein Shake" is a 12-pack at $33.99); the item's `size` ("12 ct /
+        # 11 fl oz") carries it, so fold it into the title for extractors.
+        size = str(entries[0].get("size") or "").strip() if entries else ""
+        if size and size.lower() not in title.lower():
+            title = f"{title}, {size}"
         out.append(
             {
                 "title": title,

@@ -57,7 +57,12 @@ and foodlion.com is walled by DataDome at every tier from this network
 food-lion's tiers are expected to degrade to a per-site error today;
 its css/browser_css selectors are likewise an unverified guess, kept
 so the strategy list is ready the day the wall lifts or a JSON search
-endpoint is found.
+endpoint is found. aldi is the third grocery site: aldi.us's storefront
+is an Instacart-powered SPA (plain HTTP to the search path 404s), so
+only its browser_css tier is expected to work; its selectors WERE
+captured from a real headless render (tests/fixtures/aldi.html) — the
+visible price is split across spans, so the price selector targets the
+screen-reader-only "Current price: $6.45" span instead.
 """
 
 
@@ -330,6 +335,24 @@ _FLAT_SITES = [
         condition="new",
         wait="div.product-tile",
     ),
+    # Aldi: the storefront at aldi.us/store/aldi is Instacart's SPA and
+    # renders nothing without JS (the plain css tier 404s); the browser
+    # tier renders the Durham store's shelf prices. Card class names are
+    # hashed (e-xxxx) so selectors lean on aria/testid/href instead.
+    _css(
+        "aldi",
+        "Aldi",
+        "https://www.aldi.us/store/aldi/s?k={query}",
+        "div[aria-label='Product']",
+        "h3",
+        "span.screen-reader-only",
+        "a[href*='/store/aldi/products/']",
+        location="Aldi, 3600 N Duke St, Durham, NC 27704",
+        condition="new",
+        subtitle="h3 + div",  # pack size ("4 x 11 fl oz") sits right after the name
+        site_url="https://www.aldi.us",
+        wait="div[aria-label='Product']",
+    ),
     {
         "slug": "facebook-marketplace",
         "name": "Facebook Marketplace",
@@ -379,6 +402,7 @@ JS_HEAVY = {
     "govdeals",
     "harris-teeter",
     "food-lion",
+    "aldi",
 }
 
 # API-first tiers, prepended where an official API exists.
