@@ -1,4 +1,4 @@
-"""Built-in site registry: 26 marketplaces as pure data.
+"""Built-in site registry: 24 marketplaces as pure data.
 
 Owns the default site specs — nothing else. A site is
 {slug, name, kind, config}. kind "tiered" holds an ordered
@@ -63,19 +63,6 @@ only its browser_css tier is expected to work; its selectors WERE
 captured from a real headless render (tests/fixtures/aldi.html) — the
 visible price is split across spans, so the price selector targets the
 screen-reader-only "Current price: $6.45" span instead.
-
-copart is a flat kind "copart_csv" site (vehicle auctions): copart.com
-is Incapsula-walled for plain HTTP and its Angular search never
-hydrates in a headless browser, so the only feed is the member-only
-"Download Sales Data" CSV of the entire inventory. config: `url` (the
-CSV download — best-effort, never seen from a logged-in session; the
-page is copart.com/content/us/en/buyer/sales/download-sales-data),
-`cookies_env` naming the env var (COPART_COOKIES) whose cookie header
-is a logged-in Copart member session, and `max_age_hours` between
-re-downloads; see api.fetch_copart_csv for the COPART_CSV cache path
-(a CSV saved by hand there works with no cookies). Rows are filtered
-per query by parse.py, and every lot's `location` is its yard's
-"City, ST" so the distance filter applies.
 """
 
 
@@ -376,17 +363,6 @@ _FLAT_SITES = [
             "region": "durham",
             "radius_km": 80,
             "cookies_env": "FB_COOKIES",
-        },
-    },
-    {
-        "slug": "copart",
-        "name": "Copart",
-        "kind": "copart_csv",
-        "config": {
-            "url": "https://www.copart.com/downloadSalesData/salesdata.csv",
-            "site_url": "https://www.copart.com",
-            "cookies_env": "COPART_COOKIES",
-            "max_age_hours": 6,
         },
     },
     {

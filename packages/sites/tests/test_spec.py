@@ -1,4 +1,4 @@
-"""Registry contract: 26 sites, unique slugs, ordered strategies, complete configs."""
+"""Registry contract: 25 sites, unique slugs, ordered strategies, complete configs."""
 
 from product_finder_sites.spec import BUILTIN_SITES, JS_HEAVY, NO_PLAIN_HTML
 
@@ -13,7 +13,7 @@ def _strategies(site):
 
 def test_twenty_four_sites_unique_slugs():
     slugs = [s["slug"] for s in BUILTIN_SITES]
-    assert len(slugs) == 26 and len(set(slugs)) == 26
+    assert len(slugs) == 25 and len(set(slugs)) == 25
 
 
 def test_facebook_marketplace_spec():
@@ -23,14 +23,6 @@ def test_facebook_marketplace_spec():
     assert fb["config"]["radius_km"] == 80
     assert fb["config"]["cookies_env"] == "FB_COOKIES"
     assert "{region}" in fb["config"]["url"] and "{query}" in fb["config"]["url"]
-
-
-def test_copart_spec():
-    cp = SITES["copart"]
-    assert cp["kind"] == "copart_csv"
-    assert cp["config"]["cookies_env"] == "COPART_COOKIES"
-    assert cp["config"]["url"].startswith("https://www.copart.com/")
-    assert cp["config"]["max_age_hours"] > 0
 
 
 def test_css_configs_complete():

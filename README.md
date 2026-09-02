@@ -90,32 +90,6 @@ for that fetch only — never written to the database, config, or logs.
 Use your own account at your own risk: Facebook rate-limits and may
 challenge automated sessions.
 
-### Copart
-
-`copart` (vehicle auctions) is neither scraped nor searched:
-copart.com walls plain HTTP and its search never renders headless.
-Instead it reads Copart's member-only **Download Sales Data** CSV of
-the entire inventory (copart.com → Buyer → Sales → CSV Sales Data),
-kept at `COPART_CSV` (default `copart_salesdata.csv` next to the
-database) and filtered per query — every word of the query must
-appear in a lot's year/make/model/trim. Two ways to feed it:
-
-- save the CSV from the member page into `data/copart_salesdata.csv`
-  by hand (works with no cookies; refresh it whenever you like), or
-- set `COPART_COOKIES` to the Cookie header of your **own** logged-in
-  Copart session and the scrape re-downloads the file every
-  `max_age_hours` (6). The download URL in the built-in spec is a
-  best guess; override `url` on the site row if yours differs. An
-  expired session keeps serving the last good file.
-
-Each lot becomes a listing titled `YEAR MAKE MODEL, <odometer> mi`
-priced at Buy-It-Now when offered, else the current high bid (blank
-with no bids), located at the yard's city so the distance filter
-applies. Title type ("Salvage Certificate"/"Clean Title"), damage,
-runs/drives and bid-vs-buy-now go in the `condition` column — not the
-title — so a product's title rules (which usually reject "salvage")
-still let you see the lots; judge them by the condition column.
-
 ## Container layout
 
 The Dockerfile has two targets:

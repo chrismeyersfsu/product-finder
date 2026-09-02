@@ -23,28 +23,12 @@ a token, resolve the nearest store of `config["chain"]` to
 to that store's locationId — response shapes are per Kroger's
 published API reference; not independently curl-verified since this
 package holds no Kroger credentials.
-
-copart_csv is not a search API at all: Copart publishes its whole
-auction inventory as one member-only CSV ("Download Sales Data" on
-copart.com — the site itself is Incapsula-walled at every tier, and
-its Angular search never hydrates headless). fetch_copart_csv keeps a
-local copy at COPART_CSV (default: copart_salesdata.csv beside PF_DB,
-else data/copart_salesdata.csv), re-downloads it with the COPART_COOKIES
-cookie header (a logged-in Copart member session) once it is older
-than config["max_age_hours"], and otherwise returns the cached file —
-so a CSV saved by hand from the member page works with no cookies at
-all. A stale copy is still served when a refresh fails (cookies expire).
-The download URL in config is unverified against a member session;
-the CSV's column names are documented by Copart's "CSV Sales Data"
-page and parse.py matches them by normalized name.
 """
 
 import base64
 import json
 import os
-import time
 import urllib.parse
-from pathlib import Path
 
 from . import fetch
 
@@ -199,52 +183,7 @@ def fetch_kroger_api(config: dict, query: str) -> tuple[str, str]:
     return fetch._get(url, headers=headers), url
 
 
-def _copart_cache_path() -> Path:
-    if os.environ.get("COPART_CSV"):
-        return Path(os.environ["COPART_CSV"])
-    if os.environ.get("PF_DB"):
-        return Path(os.environ["PF_DB"]).parent / "copart_salesdata.csv"
-    return Path("data") / "copart_salesdata.csv"
-
-
-def _looks_like_csv(body: str) -> bool:
-    head = body.lstrip()[:2000].splitlines()
-    return bool(head) and head[0].count(",") >= 10 and "<html" not in head[0].lower()
-
-
-def fetch_copart_csv(config: dict, query: str) -> tuple[str, str]:
-    """Copart's member CSV of every lot on sale, cached at COPART_CSV and
-    refreshed with the COPART_COOKIES cookie header when older than
-    config["max_age_hours"] (default 6). `query` is unused here — the
-    parser filters rows, since the file is the whole inventory."""
-    path = _copart_cache_path()
-    max_age = float(config.get("max_age_hours", 6)) * 3600
-    cached = path.exists()
-    fresh = cached and time.time() - path.stat().st_mtime < max_age
-    cookies = os.environ.get(config.get("cookies_env", "COPART_COOKIES"))
-    if not fresh and cookies:
-        try:
-            body = fetch._get(
-                config["url"],
-                headers={"Cookie": cookies, "Accept": "text/csv,*/*;q=0.8"},
-                timeout=float(config.get("timeout", 120)),
-            )
-            if not _looks_like_csv(body):
-                raise fetch.FetchError("copart: response is not a CSV (COPART_COOKIES expired?)")
-        except fetch.FetchError:
-            if not cached:
-                raise
-        else:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(body)
-            return body, config["url"]
-    if not cached:
-        raise fetch.FetchError(f"COPART_COOKIES unset and no CSV at {path}")
-    return path.read_text(), path.as_uri() if path.is_absolute() else f"file:{path}"
-
-
 FETCHERS = {
-    "copart_csv": fetch_copart_csv,
     "ebay_api": fetch_ebay_api,
     "bestbuy_api": fetch_bestbuy_api,
     "walmart_api": fetch_walmart_api,

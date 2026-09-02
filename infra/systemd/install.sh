@@ -72,7 +72,6 @@ if [[ ! -f "$SECRETS" ]]; then
 # BESTBUY_API_KEY=
 # WALMART_API_KEY=
 # FB_COOKIES=
-# COPART_COOKIES=
 TPL
     )
     echo "created $SECRETS (fill in API keys, then rerun)"
