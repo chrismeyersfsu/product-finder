@@ -80,3 +80,12 @@ def test_goodwill_api_json():
     assert out[0]["price"] == 54.0
     assert out[0]["url"] == "https://shopgoodwill.com/item/275108890"
     assert out[1]["price"] == 129.99  # buyNowPrice fallback when currentPrice 0
+
+
+def test_bonanza_css_split_price_spans():
+    out = _parse("bonanza", "css", "bonanza.html", "https://www.bonanza.com/items/search")
+    assert len(out) == 3
+    assert out[0]["title"].startswith("Love Beauty and Planet Bath Bombs")
+    assert out[0]["price"] == 15.83  # $ / whole / . / cents are separate spans
+    assert out[2]["price"] == 4.95
+    assert out[0]["url"].startswith("https://www.bonanza.com/listings/Love-Beauty")

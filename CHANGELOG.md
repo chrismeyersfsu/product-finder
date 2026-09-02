@@ -2,6 +2,11 @@
 
 ## 0.10.0 — 2026-09-01
 
+- Bonanza prices parse (the price is an `a.item_price` with the
+  dollars and cents in separate spans; every Bonanza row was priceless
+  until now). Split-price regex accepts a dot between the spans.
+- Bath bombs product added via `add_product` (multi-packs; molds,
+  presses, DIY kits and wholesale lots rejected).
 - Products carry an optional `sites` list (`add_product(sites=[...])`);
   `run_search` and the hourly scrape search only those sites, so local
   goods like cars aren't queried against Newegg. Empty keeps the old

@@ -21,8 +21,8 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 _PRICE_RE = re.compile(r"\$\s*([\d,]+(?:\.\d{1,2})?)")
-# Woot-style split price markup: "$ 27 99" meaning $27.99
-_PRICE_SPLIT_RE = re.compile(r"\$\s*(\d{1,4})\s+(\d{2})(?!\d)")
+# Split price markup: Woot "$ 27 99", Bonanza "$ 15 . 83" — both $27.99-style
+_PRICE_SPLIT_RE = re.compile(r"\$\s*(\d{1,4})\s*(?:\.\s*|\s+)(\d{2})(?!\d)")
 _NUM_RE = re.compile(r"([\d,]+(?:\.\d{1,2})?)")
 # eBay-style "seller_name (2,394) 99.1%"
 _SELLER_RE = re.compile(r"\(([\d,]+)\)\s*([\d.]+)%")

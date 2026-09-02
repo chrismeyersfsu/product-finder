@@ -234,7 +234,7 @@ _FLAT_SITES = [
         "https://www.bonanza.com/items/search?q%5Bsearch_term%5D={query}",
         "div.search_result_item",
         "div.item_title a",
-        "div.item_price",
+        "a.item_price",
         "div.item_title a",
     ),
     # Woot removed site search; scrape the computers category feed and
