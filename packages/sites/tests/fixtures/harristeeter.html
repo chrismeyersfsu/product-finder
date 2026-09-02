@@ -1,0 +1,33 @@
+<!--
+  SYNTHETIC fixture, not a live capture: harristeeter.com resets both
+  plain HTTP and a real headless-browser connection from this network
+  (ERR_HTTP2_PROTOCOL_ERROR — the same Akamai wall as staples), so no
+  real search-results page was ever seen. This markup only exercises
+  the css parser against spec.py's guessed selectors
+  (div.ProductCard / span.ProductCard-title / span.ProductCard-price /
+  a.ProductCard-link); it says nothing about whether those selectors
+  match the real site.
+-->
+<html>
+<body>
+  <div class="results">
+    <div class="ProductCard">
+      <a class="ProductCard-link" href="/p/kroger-grade-a-large-eggs-12-ct/0001111060903">
+        <span class="ProductCard-title">Kroger Grade A Large Eggs, 12 ct</span>
+      </a>
+      <span class="ProductCard-price">$3.49</span>
+    </div>
+    <div class="ProductCard">
+      <a class="ProductCard-link" href="/p/simple-truth-organic-cage-free-eggs-12-ct/0001111087251">
+        <span class="ProductCard-title">Simple Truth Organic Cage Free Eggs, 12 ct</span>
+      </a>
+      <span class="ProductCard-price">$5.99</span>
+    </div>
+    <div class="ProductCard">
+      <!-- no link: card without a product page yet, must be skipped -->
+      <span class="ProductCard-title">Coming soon item</span>
+      <span class="ProductCard-price">$0.00</span>
+    </div>
+  </div>
+</body>
+</html>

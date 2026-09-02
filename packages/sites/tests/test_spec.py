@@ -1,4 +1,4 @@
-"""Registry contract: 22 sites, unique slugs, ordered strategies, complete configs."""
+"""Registry contract: 24 sites, unique slugs, ordered strategies, complete configs."""
 
 from product_finder_sites.spec import BUILTIN_SITES, JS_HEAVY, NO_PLAIN_HTML
 
@@ -11,9 +11,9 @@ def _strategies(site):
     return [{"kind": site["kind"], "config": site["config"]}]
 
 
-def test_twenty_two_sites_unique_slugs():
+def test_twenty_four_sites_unique_slugs():
     slugs = [s["slug"] for s in BUILTIN_SITES]
-    assert len(slugs) == 22 and len(set(slugs)) == 22
+    assert len(slugs) == 24 and len(set(slugs)) == 24
 
 
 def test_facebook_marketplace_spec():
@@ -42,6 +42,7 @@ def test_api_first_ordering():
         ("ebay", "ebay_api"),
         ("bestbuy", "bestbuy_api"),
         ("walmart", "walmart_api"),
+        ("harris-teeter", "kroger_api"),
     ):
         kinds = [s["kind"] for s in _strategies(SITES[slug])]
         assert kinds[0] == api_kind, slug
@@ -62,3 +63,20 @@ def test_js_heavy_sites_have_browser_fallback_last():
 
 def test_reddit_is_api_only():
     assert SITES["reddit-hardwareswap"]["kind"] == "reddit_json"
+
+
+def test_harris_teeter_kroger_config():
+    ht = SITES["harris-teeter"]
+    kroger = next(s for s in _strategies(ht) if s["kind"] == "kroger_api")
+    assert kroger["config"]["zip"] == "27705"
+    assert kroger["config"]["chain"] == "HARRISTEETER"
+    assert kroger["config"]["condition"] == "new"
+    assert "Durham, NC" in kroger["config"]["location"]
+
+
+def test_grocery_sites_carry_static_location_and_condition():
+    for slug in ("harris-teeter", "food-lion"):
+        for strat in _strategies(SITES[slug]):
+            if strat["kind"] in ("css", "browser_css"):
+                assert strat["config"]["condition"] == "new", slug
+                assert "27705" in strat["config"]["location"], slug

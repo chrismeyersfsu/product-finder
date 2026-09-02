@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.11.1 — 2026-09-01
+
+- Two local grocery sites added: `harris-teeter` and `food-lion`, each
+  scoped to the store nearest Durham 27705, returning
+  {title, price, url, location, condition: "new"}. Harris Teeter is a
+  Kroger banner: a new `kroger_api` tier (api.py's
+  `fetch_kroger_api`, gated on `KROGER_CLIENT_ID`/`KROGER_CLIENT_SECRET`)
+  does token -> nearest-HARRISTEETER-location -> product search against
+  Kroger's public Products API and is the only tier expected to work
+  live; harristeeter.com itself resets both plain HTTP and a real
+  headless-browser connection from this network
+  (ERR_HTTP2_PROTOCOL_ERROR, the same Akamai wall as staples), so its
+  css/browser_css tiers carry unverified best-effort selectors. Food
+  Lion has no public developer API (unlike Kroger, Ahold Delhaize runs
+  none) and foodlion.com is DataDome-walled at every tier from this
+  network (plain HTTP 403s, a real browser gets a "please enable JS"
+  captcha interstitial) — its tiers are all expected to error until the
+  wall lifts or a JSON search endpoint turns up; the challenge-page
+  regex now recognizes that interstitial's text. css/browser_css
+  configs (and kroger_api) gained static `location`/`condition`
+  pass-through fields for grocery sites, where every row shares one
+  store's address rather than a per-card selector. 24 builtin sites,
+  up from 22.
+
 ## 0.11.0 — 2026-09-01
 
 - Distance from home. `set_home(address)` geocodes an address and

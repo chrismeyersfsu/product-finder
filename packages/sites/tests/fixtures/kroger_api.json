@@ -1,0 +1,26 @@
+{
+  "data": [
+    {
+      "productId": "0001111060903",
+      "description": "Kroger Grade A Large Eggs, 12 ct",
+      "brand": "Kroger",
+      "items": [
+        {"itemId": "0001111060903", "size": "12 ct", "price": {"regular": 3.49, "promo": 2.99}}
+      ]
+    },
+    {
+      "productId": "0001111087251",
+      "description": "Simple Truth Organic Cage Free Eggs, 12 ct",
+      "brand": "Simple Truth",
+      "items": [
+        {"itemId": "0001111087251", "size": "12 ct", "price": {"regular": 5.99, "promo": 0}}
+      ]
+    },
+    {
+      "productId": "0001111060911",
+      "description": "no-item row (out of stock at this store)",
+      "brand": "Kroger",
+      "items": []
+    }
+  ]
+}

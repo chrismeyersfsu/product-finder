@@ -27,7 +27,8 @@ _TIER_LABEL = {"css": "css", "reddit_json": "json"}
 _CHALLENGE_RE = re.compile(
     r"captcha|robot or human|just a moment|security measure|access denied"
     r"|pardon our interruption|are you a human|verify you are"
-    r"|sorry! something went wrong",  # amazon's bot wall
+    r"|sorry! something went wrong"  # amazon's bot wall
+    r"|enable js and disable any ad blocker",  # foodlion's DataDome wall
     re.IGNORECASE,
 )
 

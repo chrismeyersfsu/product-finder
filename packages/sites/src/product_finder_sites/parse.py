@@ -11,12 +11,18 @@ captions into an ISO sold_at date). One deliberate exception to
 never-raises: the facebook_marketplace parser raises LoginWall when
 Facebook serves a login page instead of results, so run.py can report
 "login wall" rather than "no items parsed".
+
+css/browser_css configs may carry static `location` and `condition`
+strings (grocery sites: a fixed store address and "new") — copied onto
+every row verbatim, unlike the per-card `seller`/`date` selectors.
+kroger_api rows get the same two fields from strategy config, since a
+Kroger product search is already scoped to one resolved store.
 """
 
 import json
 import re
 from datetime import datetime
-from urllib.parse import urljoin
+from urllib.parse import quote_plus, urljoin
 
 from bs4 import BeautifulSoup
 
@@ -107,6 +113,8 @@ def _parse_css(config: dict, page_url: str, body: str) -> list[dict]:
                 "seller_rating": rating,
                 "seller_feedback_count": count,
                 "sold_at": sold_at,
+                "location": config.get("location"),
+                "condition": config.get("condition"),
             }
         )
     return out
@@ -264,6 +272,36 @@ def _parse_goodwill_api(body: str) -> list[dict]:
     return out
 
 
+def _parse_kroger_api(config: dict, body: str) -> list[dict]:
+    """Kroger Products API response -> listings. There's no product-page
+    URL in the payload, so `url` is a deep link into the banner's own
+    search (config["site_url"], e.g. harristeeter.com) for that item's
+    description — not a canonical product page."""
+    site_url = config.get("site_url", "https://www.harristeeter.com")
+    out = []
+    for item in _json_items(body, "data"):
+        title, product_id = item.get("description", ""), item.get("productId")
+        if not title or not product_id:
+            continue
+        entries = item.get("items") or []
+        # "regular", not "promo" — Kroger's API returns promo: 0 for "no
+        # active promotion" rather than omitting the field, which would
+        # otherwise misread as a free item.
+        price = entries[0].get("price", {}).get("regular") if entries else None
+        out.append(
+            {
+                "title": title,
+                "price": float(price) if price else None,
+                "url": f"{site_url}/search?query={quote_plus(title)}",
+                "location": config.get("location"),
+                "condition": config.get("condition", "new"),
+                "seller_rating": None,
+                "seller_feedback_count": None,
+            }
+        )
+    return out
+
+
 def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
     """Dispatch on strategy kind. `strategy` is a {kind, config} dict —
     a flat single-strategy site works too (same shape)."""
@@ -282,4 +320,6 @@ def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
         return _parse_walmart_api(page_url, body)
     if kind == "goodwill_api":
         return _parse_goodwill_api(body)
+    if kind == "kroger_api":
+        return _parse_kroger_api(strategy["config"], body)
     raise ValueError(f"unknown strategy kind: {kind}")

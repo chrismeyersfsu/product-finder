@@ -1,16 +1,17 @@
-"""Built-in site registry: 22 marketplaces as pure data.
+"""Built-in site registry: 24 marketplaces as pure data.
 
 Owns the default site specs — nothing else. A site is
 {slug, name, kind, config}. kind "tiered" holds an ordered
 config["strategies"] list of {kind, config} tried best-first:
-official API (ebay_api/bestbuy_api/walmart_api/reddit_json, keyed by
-env vars — see api.py), then plain-HTML "css", then "browser_css"
-(same selectors, page fetched by a real browser) for JS-heavy sites.
-A flat kind ("css", "reddit_json") is a single-strategy site. css/
-browser_css config: a search `url` with a {query} placeholder plus
-CSS selectors (item/title/price/link, optional link_attr and seller).
-Never fetches, parses, or stores; callers copy these into the sites
-table and may override any config there.
+official API (ebay_api/bestbuy_api/walmart_api/kroger_api/reddit_json,
+keyed by env vars — see api.py), then plain-HTML "css", then
+"browser_css" (same selectors, page fetched by a real browser) for
+JS-heavy sites. A flat kind ("css", "reddit_json") is a
+single-strategy site. css/browser_css config: a search `url` with a
+{query} placeholder plus CSS selectors (item/title/price/link,
+optional link_attr and seller). Never fetches, parses, or stores;
+callers copy these into the sites table and may override any config
+there.
 
 Selectors are best-effort snapshots of each site's public search page
 and will rot as sites redesign; the css/browser_css sets below were
@@ -35,6 +36,28 @@ default "durham"), radius_km (default 80 ~ 50 miles around the region
 — the URL takes no ZIP anonymously), and cookies_env naming the env
 var (FB_COOKIES) whose cookie-header value, when set, is injected into
 the browser context for a logged-in search.
+
+harris-teeter and food-lion are the two local grocery sites (added for
+a Durham 27705 shopper), each scoped to one physical store via a
+static `location` string and `condition: "new"` in config (see
+parse.py's css/kroger_api handling of those two keys) rather than a
+per-card selector — a store's shelf listings have one fixed address,
+unlike a marketplace card. harris-teeter is a Kroger banner: its api
+tier (kroger_api, KROGER_CLIENT_ID/KROGER_CLIENT_SECRET) resolves the
+nearest HARRISTEETER location to config["zip"] live and is the only
+tier expected to work — harristeeter.com itself resets *both* plain
+HTTP and a real headless-browser connection from this network
+(ERR_HTTP2_PROTOCOL_ERROR, the same Akamai wall as staples), so its
+css/browser_css selectors below are an unverified best-effort guess,
+never seen against a real response. food-lion has no official API
+(Ahold Delhaize runs no public developer portal for it, unlike Kroger)
+and foodlion.com is walled by DataDome at every tier from this network
+— plain HTTP 403s outright and a real headless browser is served a
+"please enable JS" captcha interstitial instead of results — so all of
+food-lion's tiers are expected to degrade to a per-site error today;
+its css/browser_css selectors are likewise an unverified guess, kept
+so the strategy list is ready the day the wall lifts or a JSON search
+endpoint is found.
 """
 
 
@@ -268,6 +291,44 @@ _FLAT_SITES = [
         "span.asset-price",
         "a.asset-title",
     ),
+    # Harris Teeter (Kroger banner): api tier does the real work (see
+    # api.py's fetch_kroger_api). harristeeter.com itself resets both
+    # plain HTTP and a real headless browser from this network
+    # (ERR_HTTP2_PROTOCOL_ERROR) — these css selectors are an
+    # unverified best-effort guess, never seen against a live response.
+    _css(
+        "harris-teeter",
+        "Harris Teeter",
+        "https://www.harristeeter.com/search?query={query}",
+        "div.ProductCard",
+        "span.ProductCard-title",
+        "span.ProductCard-price",
+        "a.ProductCard-link",
+        location="Harris Teeter, 2107 Hillsborough Rd, Durham, NC 27705",
+        condition="new",
+        zip="27705",
+        chain="HARRISTEETER",
+        site_url="https://www.harristeeter.com",
+        wait="div.ProductCard",
+    ),
+    # Food Lion (Ahold Delhaize): no public developer API. foodlion.com
+    # is DataDome-walled from this network at every tier — plain HTTP
+    # 403s outright, a real headless browser gets served a "please
+    # enable JS" captcha interstitial — so these css selectors are an
+    # unverified best-effort guess, kept for the day the wall lifts or
+    # a JSON search endpoint (the SPA must call one) is found.
+    _css(
+        "food-lion",
+        "Food Lion",
+        "https://www.foodlion.com/shop/search?q={query}",
+        "div.product-tile",
+        "span.product-tile__title",
+        "span.product-tile__price",
+        "a.product-tile__link",
+        location="Food Lion, 3808 Guess Rd, Durham, NC 27705",
+        condition="new",
+        wait="div.product-tile",
+    ),
     {
         "slug": "facebook-marketplace",
         "name": "Facebook Marketplace",
@@ -315,6 +376,8 @@ JS_HEAVY = {
     "offerup",
     "shopgoodwill",
     "govdeals",
+    "harris-teeter",
+    "food-lion",
 }
 
 # API-first tiers, prepended where an official API exists.
@@ -323,14 +386,21 @@ _API_FIRST = {
     "bestbuy": "bestbuy_api",
     "walmart": "walmart_api",
     "shopgoodwill": "goodwill_api",  # keyless public buyer API
+    "harris-teeter": "kroger_api",
 }
+
+# api-tier strategies that need config (zip/chain/location/...) rather
+# than the env-only fetchers, which take an empty config.
+_API_NEEDS_CONFIG = {"kroger_api"}
 
 
 def _tiered(site: dict) -> dict:
     """Wrap a flat css site in ordered strategies: api? -> css -> browser?"""
     strategies = []
     if site["slug"] in _API_FIRST:
-        strategies.append({"kind": _API_FIRST[site["slug"]], "config": {}})
+        api_kind = _API_FIRST[site["slug"]]
+        api_config = site["config"] if api_kind in _API_NEEDS_CONFIG else {}
+        strategies.append({"kind": api_kind, "config": api_config})
     if site["slug"] not in NO_PLAIN_HTML:
         strategies.append({"kind": "css", "config": site["config"]})
     if site["slug"] in JS_HEAVY | NO_PLAIN_HTML:

@@ -12,7 +12,17 @@ Credentials: EBAY_CLIENT_ID + EBAY_CLIENT_SECRET (eBay Browse API,
 client-credentials OAuth), BESTBUY_API_KEY (Best Buy Products API),
 WALMART_API_KEY (Walmart affiliate API — best-effort: Walmart's
 production affiliate API wants signed headers; a plain key header is
-sent here and 401s surface as per-site errors).
+sent here and 401s surface as per-site errors). KROGER_CLIENT_ID +
+KROGER_CLIENT_SECRET (Kroger public Products API, which also covers
+the Harris Teeter banner) — client-credentials OAuth scoped to
+`product.compact`; this scope's token is assumed to also cover the
+Location API (both are typically enabled together on a Kroger
+developer app). fetch_kroger_api does three calls under one seam: get
+a token, resolve the nearest store of `config["chain"]` to
+`config["zip"]` via /v1/locations, then search /v1/products filtered
+to that store's locationId — response shapes are per Kroger's
+published API reference; not independently curl-verified since this
+package holds no Kroger credentials.
 """
 
 import base64
@@ -116,9 +126,61 @@ def fetch_goodwill_api(config: dict, query: str) -> tuple[str, str]:
     return resp, _GOODWILL_URL
 
 
+_KROGER_TOKEN_URL = "https://api.kroger.com/v1/connect/oauth2/token"
+_KROGER_LOCATIONS_URL = "https://api.kroger.com/v1/locations"
+_KROGER_PRODUCTS_URL = "https://api.kroger.com/v1/products"
+
+
+def _kroger_token() -> str:
+    cid, secret = _require_env("KROGER_CLIENT_ID", "KROGER_CLIENT_SECRET")
+    basic = base64.b64encode(f"{cid}:{secret}".encode()).decode()
+    body = fetch._post(
+        _KROGER_TOKEN_URL,
+        data="grant_type=client_credentials&scope=product.compact",
+        headers={"Authorization": f"Basic {basic}"},
+    )
+    try:
+        return json.loads(body)["access_token"]
+    except (ValueError, KeyError) as e:
+        raise fetch.FetchError("kroger oauth: no access_token in response") from e
+
+
+def _kroger_location_id(config: dict, headers: dict) -> str:
+    url = (
+        _KROGER_LOCATIONS_URL
+        + "?filter.zipCode.near="
+        + urllib.parse.quote_plus(config["zip"])
+        + "&filter.chain="
+        + urllib.parse.quote_plus(config["chain"])
+        + f"&filter.radiusInMiles={config.get('radius_miles', 15)}&filter.limit=1"
+    )
+    body = fetch._get(url, headers=headers)
+    try:
+        return json.loads(body)["data"][0]["locationId"]
+    except (ValueError, KeyError, IndexError) as e:
+        raise fetch.FetchError(f"kroger: no {config['chain']} location near {config['zip']}") from e
+
+
+def fetch_kroger_api(config: dict, query: str) -> tuple[str, str]:
+    """Kroger Products API, scoped to the store nearest `config['zip']` of
+    banner `config['chain']` (e.g. "HARRISTEETER"). Three HTTP calls behind
+    one seam: token, then locations (resolves locationId), then products."""
+    token = _kroger_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    location_id = _kroger_location_id(config, headers)
+    url = (
+        _KROGER_PRODUCTS_URL
+        + "?filter.term="
+        + urllib.parse.quote_plus(query)
+        + f"&filter.locationId={location_id}&filter.limit=10"
+    )
+    return fetch._get(url, headers=headers), url
+
+
 FETCHERS = {
     "ebay_api": fetch_ebay_api,
     "bestbuy_api": fetch_bestbuy_api,
     "walmart_api": fetch_walmart_api,
     "goodwill_api": fetch_goodwill_api,
+    "kroger_api": fetch_kroger_api,
 }

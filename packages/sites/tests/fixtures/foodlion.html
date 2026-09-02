@@ -1,0 +1,27 @@
+<!--
+  SYNTHETIC fixture, not a live capture: foodlion.com is DataDome-walled
+  from this network at every tier (see foodlion_walled.html for the real
+  captured wall page), so no real search-results page was ever seen.
+  This markup only exercises the css parser against spec.py's guessed
+  selectors (div.product-tile / span.product-tile__title /
+  span.product-tile__price / a.product-tile__link); it says nothing
+  about whether those selectors match the real site.
+-->
+<html>
+<body>
+  <div class="results">
+    <div class="product-tile">
+      <a class="product-tile__link" href="/shop/product/large-white-eggs-12-ct/0007874203490">
+        <span class="product-tile__title">Food Lion Large White Eggs, 12 ct</span>
+      </a>
+      <span class="product-tile__price">$2.89</span>
+    </div>
+    <div class="product-tile">
+      <a class="product-tile__link" href="/shop/product/nature-s-place-organic-eggs-12-ct/0007874209103">
+        <span class="product-tile__title">Nature's Place Organic Eggs, 12 ct</span>
+      </a>
+      <span class="product-tile__price">$5.49</span>
+    </div>
+  </div>
+</body>
+</html>

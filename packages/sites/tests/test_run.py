@@ -12,7 +12,14 @@ SITES = {s["slug"]: s for s in BUILTIN_SITES}
 
 @pytest.fixture(autouse=True)
 def no_api_creds(monkeypatch):
-    for var in ("EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET", "BESTBUY_API_KEY", "WALMART_API_KEY"):
+    for var in (
+        "EBAY_CLIENT_ID",
+        "EBAY_CLIENT_SECRET",
+        "BESTBUY_API_KEY",
+        "WALMART_API_KEY",
+        "KROGER_CLIENT_ID",
+        "KROGER_CLIENT_SECRET",
+    ):
         monkeypatch.delenv(var, raising=False)
 
 
@@ -212,3 +219,83 @@ def test_search_many_keeps_error_only_without_any_success(monkeypatch):
     out = run.search_many([site], ["q1", "q2"])
     assert out["errors"] == {}  # q2 succeeded; q1's 403 is not reported
     assert out["strategies"] == {"newegg2": "css"}
+
+
+def test_kroger_creds_unset_falls_through_to_css(monkeypatch):
+    monkeypatch.setattr(
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0, cookies=None: "<html>no cards here</html>",
+    )
+    result = run.search_site(SITES["harris-teeter"], "eggs")
+    assert result["attempts"][0] == {
+        "strategy": "kroger_api",
+        "error": "KROGER_CLIENT_ID/KROGER_CLIENT_SECRET unset",
+    }
+    # css and browser_css both attempted next, against harris-teeter's
+    # guessed (unverified) selectors, which the fixture-free bodies here
+    # never match — that's fine, this test only checks tier order/labels.
+    kinds = [a["strategy"] for a in result["attempts"]]
+    assert kinds == ["kroger_api", "css", "browser_css"]
+
+
+def test_kroger_api_tier_runs_when_creds_set(monkeypatch):
+    monkeypatch.setenv("KROGER_CLIENT_ID", "cid")
+    monkeypatch.setenv("KROGER_CLIENT_SECRET", "secret")
+    calls = []
+
+    def fake_post(url, data, headers=None, timeout=25.0):
+        calls.append(("post", url))
+        assert url == "https://api.kroger.com/v1/connect/oauth2/token"
+        assert headers["Authorization"].startswith("Basic ")
+        assert "scope=product.compact" in data
+        return '{"access_token": "tok"}'
+
+    def fake_get(url, headers=None, timeout=25.0):
+        calls.append(("get", url))
+        assert headers["Authorization"] == "Bearer tok"
+        if "locations" in url:
+            assert "filter.zipCode.near=27705" in url and "filter.chain=HARRISTEETER" in url
+            return '{"data": [{"locationId": "01600974"}]}'
+        assert "filter.locationId=01600974" in url and "filter.term=eggs" in url
+        return (FIXTURES / "kroger_api.json").read_text()
+
+    monkeypatch.setattr(fetch, "_post", fake_post)
+    monkeypatch.setattr(fetch, "_get", fake_get)
+    result = run.search_site(SITES["harris-teeter"], "eggs")
+    assert result["error"] is None
+    assert result["strategy"] == "kroger_api"
+    assert [c[0] for c in calls] == ["post", "get", "get"]
+    assert result["listings"][0]["price"] == 3.49
+    assert (
+        result["listings"][0]["location"] == "Harris Teeter, 2107 Hillsborough Rd, Durham, NC 27705"
+    )
+    assert result["listings"][0]["condition"] == "new"
+
+
+def test_kroger_no_location_near_zip_is_a_clear_error(monkeypatch):
+    monkeypatch.setenv("KROGER_CLIENT_ID", "cid")
+    monkeypatch.setenv("KROGER_CLIENT_SECRET", "secret")
+    monkeypatch.setattr(
+        fetch, "_post", lambda url, data, headers=None, timeout=25.0: '{"access_token": "tok"}'
+    )
+    monkeypatch.setattr(fetch, "_get", lambda url, headers=None, timeout=25.0: '{"data": []}')
+    monkeypatch.setattr(
+        fetch, "_get_browser", lambda url, wait=None, timeout=30.0, cookies=None: ""
+    )
+    result = run.search_site(SITES["harris-teeter"], "eggs")
+    assert result["attempts"][0]["error"] == "kroger: no HARRISTEETER location near 27705"
+
+
+def test_food_lion_browser_wall_is_labeled_challenge_page(monkeypatch):
+    monkeypatch.setattr(fetch, "_get", lambda url, headers=None, timeout=25.0: "<html>403</html>")
+    monkeypatch.setattr(
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0, cookies=None: (
+            FIXTURES / "foodlion_walled.html"
+        ).read_text(),
+    )
+    result = run.search_site(SITES["food-lion"], "eggs")
+    assert result["strategy"] is None and result["listings"] == []
+    assert "browser: challenge page" in result["error"]
