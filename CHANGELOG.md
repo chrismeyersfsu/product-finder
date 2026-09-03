@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.0 — 2026-09-03
+
+- Deals table: products whose listings carry year and mileage (cars)
+  now show `Est. value` and `vs est.` in place of `vs median` — a
+  fitted market value for that year and mileage, computed from the
+  product's own listings across all sites (not KBB).
+
 ## 0.16.1 — 2026-09-03
 
 - The Deals table drops columns that are empty in every row (`$/unit`

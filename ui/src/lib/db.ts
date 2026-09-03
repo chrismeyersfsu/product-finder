@@ -38,8 +38,10 @@ export interface Listing {
   last_seen: string;
   hidden_at: string | null;
   image_url: string | null;
+  est_value: number | null;
   median_price?: number;
   pct_vs_median?: number;
+  pct_vs_est?: number;
 }
 export interface Observation {
   site_slug: string;
@@ -171,6 +173,9 @@ export function deals(productSlug: string, f: DealFilters = {}): Listing[] {
         l.pct_vs_median = Math.round(((l.price - median) / median) * 1000) / 10;
       }
   }
+  for (const l of listings)
+    if (l.price != null && l.price > 0 && l.est_value != null && l.est_value > 0)
+      l.pct_vs_est = Math.round(((l.price - l.est_value) / l.est_value) * 1000) / 10;
   return listings;
 }
 

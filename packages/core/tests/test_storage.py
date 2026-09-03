@@ -173,3 +173,22 @@ def test_image_url_is_stored_and_kept_when_a_rescrape_has_none(tmp_path):
     assert storage.query_listings(conn, "w")[0]["image_url"] == "http://img/1.jpg"
     storage.upsert_listing(conn, {**li, "image_url": "http://img/2.jpg"})
     assert storage.query_listings(conn, "w")[0]["image_url"] == "http://img/2.jpg"
+
+
+def test_set_est_values_rewrites_the_whole_product(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_product(conn, {"slug": "w"})
+    li = {"product_slug": "w", "site_slug": "ebay"}
+    a = storage.upsert_listing(conn, {**li, "url": "http://x/1", "attrs": {"year": 2020}})
+    b = storage.upsert_listing(conn, {**li, "url": "http://x/2"})
+    storage.set_est_values(conn, "w", {a: 12_000.0, b: 9_000.0})
+    assert {r["id"]: r["est_value"] for r in storage.query_listings(conn, "w")} == {
+        a: 12_000.0,
+        b: 9_000.0,
+    }
+    storage.set_est_values(conn, "w", {a: 11_000.0, b: None})  # b lost its estimate
+    assert {r["id"]: r["est_value"] for r in storage.query_listings(conn, "w")} == {
+        a: 11_000.0,
+        b: None,
+    }
+    assert [r["attrs"] for r in storage.product_listings(conn, "w")] == [{"year": 2020}, {}]

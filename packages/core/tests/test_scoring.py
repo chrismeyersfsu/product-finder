@@ -64,3 +64,65 @@ def test_reject_rules_discard_non_product():
     assert scoring.rejected(attrs, LAPTOP["criteria"])
     attrs = scoring.extract_attrs(TITLE, LAPTOP["extractors"])
     assert scoring.rejected(attrs, LAPTOP["criteria"]) is None
+
+
+def _cars(n=40, seed=7):
+    """Synthetic market: $30k new, -9%/yr, -5%/10k mi, ±4% noise."""
+    import math
+    import random
+
+    rng = random.Random(seed)
+    rows = []
+    for _ in range(n):
+        year = rng.randint(2014, 2024)
+        miles = rng.randint(5_000, 120_000)
+        price = 30_000 * math.exp(-0.09 * (2026 - year) - 0.05 * miles / 10_000)
+        price *= 1 + rng.uniform(-0.04, 0.04)
+        rows.append({"price": round(price), "attrs": {"year": year, "mileage": miles}})
+    return rows
+
+
+def test_value_model_recovers_age_and_mileage_effects():
+    model = scoring.fit_value_model(_cars(), now_year=2026)
+    _, b, c = model["full"]
+    assert -0.11 < b < -0.07  # per year of age
+    assert -0.07 < c < -0.03  # per 10k miles
+    est = scoring.estimate_value(model, {"year": 2020, "mileage": 50_000}, 2026)
+    assert abs(est - 30_000 * 2.718281828 ** (-0.09 * 6 - 0.25)) / est < 0.05
+
+
+def test_value_model_ignores_placeholders_salvage_and_outliers():
+    rows = _cars()
+    rows += [
+        {"price": 1, "attrs": {"year": 2020, "mileage": 50_000}},  # "$1" placeholder
+        {"price": 4_000, "attrs": {"year": 2022, "mileage": 10_000, "salvage": True}},
+        {"price": 90_000, "attrs": {"year": 2018, "mileage": 80_000}},  # typo-level outlier
+    ]
+    clean = scoring.fit_value_model(_cars(), 2026)
+    noisy = scoring.fit_value_model(rows, 2026)
+    for probe in ({"year": 2018, "mileage": 80_000}, {"year": 2023, "mileage": 15_000}):
+        a, b = (
+            scoring.estimate_value(clean, probe, 2026),
+            scoring.estimate_value(noisy, probe, 2026),
+        )
+        assert abs(a - b) / a < 0.03
+
+
+def test_value_model_falls_back_to_year_when_mileage_unknown():
+    rows = _cars()
+    model = scoring.fit_value_model(rows, 2026)
+    assert scoring.estimate_value(model, {"year": 2020}, 2026) > scoring.estimate_value(
+        model, {"year": 2015}, 2026
+    )
+    assert scoring.estimate_value(model, {}, 2026) is None
+    assert scoring.estimate_value(None, {"year": 2020}, 2026) is None
+    # too few rows, or rows with no year at all (non-car products): no model
+    assert scoring.fit_value_model(rows[:5], 2026) is None
+    assert scoring.fit_value_model([{"price": 9.0, "attrs": {}}] * 30, 2026) is None
+
+
+def test_annotate_deals_adds_pct_vs_est_when_present():
+    rows = [{"price": 90.0, "est_value": 100.0}, {"price": 50.0}]
+    scoring.annotate_deals(rows)
+    assert rows[0]["pct_vs_est"] == -10.0
+    assert "pct_vs_est" not in rows[1]

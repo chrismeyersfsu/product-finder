@@ -260,6 +260,6 @@ table.data[data-sortable] thead th:focus-visible { outline: 2px solid var(--acce
   table.data.cards .thumb { flex-basis: 72px; width: 72px; height: 72px; }
   table.data.cards td.c-act { position: absolute; top: 8px; right: 0; }
   table.data.cards td.c-act .btn-ghost { padding: 6px 12px; font-size: 13px; }
-  table.data.cards td.c-minor, table.data.cards td.c-empty { display: none; }
+  table.data.cards td.c-minor, table.data.cards td.c-empty, table.data.cards td.col-blank { display: none; }
   table.data.cards .status { white-space: normal; }
 }

@@ -40,6 +40,8 @@ claude mcp add --transport http product-finder http://localhost:8848/mcp
 - `query_listings` — filter stored listings (score, price, site)
 - `best_deals` — top-scored listings with price-vs-median context plus
   the product's manual checks (battery health, keyboard wear, ...)
+- `backfill_market_values` — refit every product's market-value model
+  (see *Used-car dealer sites*); `run_search` does this per product
 - `project_list_files` / `project_read_file` / `project_write_file` /
   `project_run_ci` — modify this project itself over MCP, scoped to
   the repo root
@@ -101,6 +103,16 @@ unchanged, and put new/used plus the dealer name in the condition
 column. Carvana has no free-text search — its URL is the query
 slugified into a make-model[-trim] path — and delivers nationwide, so
 its rows have no location and drop out under a distance cap.
+
+**Market value.** KBB, Edmunds, TrueCar and the rest sit behind bot
+walls, so there is no book value to fetch. Instead, after every scrape
+of a product whose listings carry `year` and `mileage`, the finder fits
+`ln(price) ~ age + miles` over that product's own listings (all sites;
+salvage, parts and placeholder prices excluded; residual outliers
+trimmed) and stores each row's fitted price as `est_value`. `best_deals`
+and the Deals page report `pct_vs_est` / **vs est.** against it. It is
+what that year and mileage is *asking* in your market, not KBB's
+transaction data; it needs at least 10 usable listings.
 
 ## Container layout
 
@@ -179,7 +191,9 @@ An Astro (SSR) dashboard in `ui/` reads the same SQLite db (its one
 write is the Hide button, which stamps `listings.hidden_at`):
 
 - **Deals** (`/`) — filterable best-deals table with KPI tiles and the
-  product's verify-by-hand checklist, each listing with its photo. A
+  product's verify-by-hand checklist, each listing with its photo. Car
+  products show **Est. value** / **vs est.** (the fitted market value
+  above) in place of **vs median**. A
   **First seen** column and a
   `new` badge (first seen in the last 2 days) surface fresh listings;
   "New within N days" keeps only those. **Hide** drops a listing from

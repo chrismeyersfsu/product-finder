@@ -133,7 +133,7 @@ def test_project_tools_scoped_to_root(tmp_path, monkeypatch):
 
 
 def test_tools_registered():
-    assert len(server.TOOLS) == 28
+    assert len(server.TOOLS) == 29
 
 
 def test_home_and_distances(monkeypatch):
@@ -240,3 +240,51 @@ def test_new_within_days_filters_on_first_seen():
         r["url"] for r in server.best_deals("thin-client-laptop", new_within_days=1)["deals"]
     ] == ["e://new"]
     assert len(server.query_listings("thin-client-laptop")) == 2
+
+
+def test_run_search_fits_market_values_for_car_products(monkeypatch):
+    server.seed_defaults()
+    conn = server._connect()
+    storage.upsert_product(
+        conn,
+        {
+            "slug": "cars",
+            "name": "Cars",
+            "queries": ["car"],
+            "sites": ["ebay"],
+            "extractors": {
+                "year": {"pattern": r"\b(20\d\d)\b", "type": "int"},
+                "mileage": {"pattern": r"(\d+) mi\b", "type": "int"},
+            },
+        },
+    )
+    # a dozen priced rows from earlier scrapes: $20k new, cheaper with age and miles
+    for i in range(12):
+        year, miles = 2014 + i, 10_000 * (12 - i)
+        storage.upsert_listing(
+            conn,
+            {
+                "product_slug": "cars",
+                "site_slug": "ebay",
+                "url": f"e://{i}",
+                "title": f"{year} Car, {miles} mi",
+                "price": round(20_000 * 0.9 ** (2026 - year) * 0.95 ** (miles / 10_000)),
+                "attrs": {"year": year, "mileage": miles},
+            },
+        )
+    monkeypatch.setattr(
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0, cookies=None: (FIXTURES / "ebay.html").read_text(),
+    )
+    summary = server.run_search("cars", sites=["ebay"], query="car")
+    assert summary["stored"] == 2  # the ebay fixture rows carry no year -> unvalued
+    assert summary["valued"] == 12
+    deals = server.best_deals("cars", limit=50)["deals"]
+    valued = {r["url"]: r for r in deals if r.get("est_value")}
+    assert len(valued) == 12
+    newest, oldest = valued["e://11"], valued["e://0"]
+    assert newest["est_value"] > oldest["est_value"]
+    assert abs(newest["pct_vs_est"]) < 5 and abs(oldest["pct_vs_est"]) < 5
+    assert all(r.get("est_value") is None for r in deals if r["url"].startswith("http"))
+    assert server.backfill_market_values()["cars"] == 12

@@ -255,7 +255,28 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
         "browser_wired": BROWSER_WIRED,
     }
     storage.record_search_run(conn, product_slug, summary)
+    summary["valued"] = _refresh_market_values(conn, product_slug)
     return summary
+
+
+def backfill_market_values() -> dict:
+    """Refit every product's market-value model (price vs. year and
+    mileage) and rewrite est_value on all its listings — run_search does
+    this per product already; this covers listings ingested earlier."""
+    conn = _connect()
+    return {p["slug"]: _refresh_market_values(conn, p["slug"]) for p in storage.list_products(conn)}
+
+
+def _refresh_market_values(conn, product_slug: str) -> int:
+    """Refit the product's market-value model over all its listings and
+    rewrite est_value on every row. Returns rows that got a value (0
+    for products whose listings carry no `year`, e.g. non-cars)."""
+    rows = storage.product_listings(conn, product_slug)
+    year = datetime.now(UTC).year
+    model = scoring.fit_value_model(rows, year)
+    values = {r["id"]: scoring.estimate_value(model, r["attrs"], year) for r in rows}
+    storage.set_est_values(conn, product_slug, values)
+    return sum(v is not None for v in values.values())
 
 
 def query_listings(
@@ -537,6 +558,7 @@ TOOLS = [
     get_home,
     backfill_distances,
     backfill_unit_prices,
+    backfill_market_values,
     seed_defaults,
     backfill_ebay_sold,
     add_price_observation,

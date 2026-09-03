@@ -10,7 +10,9 @@ re-running a search refreshes price/last_seen instead of duplicating —
 first_seen and hidden_at survive that refresh, so "new since" and
 hide-from-deals state persist across scrapes, and a scrape that finds
 no image keeps the image_url an earlier one stored. query_listings()
-omits hidden rows unless asked for them.
+omits hidden rows unless asked for them. est_value (the fitted market
+value, scoring.py's math) is written only by set_est_values(), which
+callers run over a whole product after a scrape.
 """
 
 import json
@@ -64,6 +66,7 @@ CREATE TABLE IF NOT EXISTS listings (
   last_seen TEXT NOT NULL,
   hidden_at TEXT,
   image_url TEXT,
+  est_value REAL,
   UNIQUE(product_slug, url)
 );
 CREATE TABLE IF NOT EXISTS settings (
@@ -135,6 +138,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE listings ADD COLUMN hidden_at TEXT")
     if "image_url" not in cols:
         conn.execute("ALTER TABLE listings ADD COLUMN image_url TEXT")
+    if "est_value" not in cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN est_value REAL")
     conn.commit()
 
 
@@ -308,6 +313,27 @@ def set_listing_hidden(conn: sqlite3.Connection, listing_id: int, hidden: bool) 
         cur = conn.execute("UPDATE listings SET hidden_at=NULL WHERE id=?", (listing_id,))
     conn.commit()
     return cur.rowcount > 0
+
+
+def product_listings(conn: sqlite3.Connection, product_slug: str) -> list[dict]:
+    """Every row for a product, hidden ones included (market data is
+    market data), for the value fit."""
+    rows = conn.execute("SELECT * FROM listings WHERE product_slug=?", (product_slug,))
+    return [_row_to_listing(r) for r in rows]
+
+
+def set_est_values(
+    conn: sqlite3.Connection, product_slug: str, values: dict[int, float | None]
+) -> None:
+    """Rewrite est_value for a product: ids in `values` get theirs, every
+    other row of the product is cleared, so a shrinking fit can't leave
+    stale estimates behind."""
+    conn.execute("UPDATE listings SET est_value=NULL WHERE product_slug=?", (product_slug,))
+    conn.executemany(
+        "UPDATE listings SET est_value=? WHERE id=? AND product_slug=?",
+        [(v, i, product_slug) for i, v in values.items() if v is not None],
+    )
+    conn.commit()
 
 
 def hidden_listings(conn: sqlite3.Connection, product_slug: str | None = None) -> list[dict]:

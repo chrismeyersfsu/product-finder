@@ -48,6 +48,9 @@ const back = url.pathname + url.search;
 // seller rating) are dropped outright so the rest fits without scrolling.
 const noUnit = !rows.some((r) => r.unit_price != null && r.unit);
 const noSeller = !rows.some((r) => r.seller_rating != null || r.seller_feedback_count != null);
+// When any row has a fitted market value, show Est. value / vs est.
+// instead of vs median (exactly one of the two renders).
+const hasEst = rows.some((r) => r.est_value != null);
 ---
 <Layout title="Deals" active="deals" product={productSlug}>
   {!db.hasDb() && <EmptyState what="database" tool="seed_defaults" />}
@@ -89,14 +92,16 @@ const noSeller = !rows.some((r) => r.seller_rating != null || r.seller_feedback_
         <EmptyState what={`listings for ${product.name}`} tool={`run_search("${productSlug}")`} />
       ) : (
         <div class="card">
-          <h2>Best deals <span class="sub">— sorted by score, then price; click $/unit to sort by price per ounce, First seen for newest; Hide removes a row for good (undo on the Hidden page)</span></h2>
+          <h2>Best deals <span class="sub">— sorted by score, then price; click $/unit to sort by price per ounce, First seen for newest; vs est. compares to a fitted market value for that year and mileage (not KBB); Hide removes a row for good (undo on the Hidden page)</span></h2>
           <div class="wrap-x">
             <table class="data cards" data-sortable>
               <thead>
                 <tr>
                   <th>Listing</th><th>Site</th><th class="num">Price</th>
                   <th class:list={["num", { "col-blank": noUnit }]} title="Price per ounce (weight or fluid), or per count when the pack size has no weight; from the listing title">$/unit</th>
-                  <th class="num">vs median</th>
+                  <th class:list={["num", { "col-blank": hasEst }]}>vs median</th>
+                  <th class:list={["num", { "col-blank": !hasEst }]} title="Fitted market value for this year and mileage, from this product's own listings across all sites (not KBB)">Est. value</th>
+                  <th class:list={["num", { "col-blank": !hasEst }]} title="Price vs. the fitted market value">vs est.</th>
                   <th class="num" aria-sort="descending">Score</th><th class="num" title={homeHint ? `Miles from ${homeHint}` : "Miles from home"}>≈ mi</th>
                   <th>Condition</th><th class:list={["num", { "col-blank": noSeller }]}>Seller</th>
                   <th title="First scrape that found this listing">First seen</th><th>Last seen</th><th></th>
@@ -118,7 +123,9 @@ const noSeller = !rows.some((r) => r.seller_rating != null || r.seller_feedback_
                     <td data-label="Site"><span class="swatch" style={`background:${siteVar(r.site_slug, knownSites)}`}></span>{r.site_slug}</td>
                     <td class="num" data-label="Price">{moneyCents(r.price)}</td>
                     <td class:list={["num", { "c-empty": r.unit_price == null || !r.unit, "col-blank": noUnit }]} data-label="$/unit">{perUnit(r.unit_price, r.unit)}</td>
-                    <td class:list={["num", { "c-empty": r.pct_vs_median == null }]} data-label="vs median">{r.pct_vs_median == null ? "—" : `${r.pct_vs_median > 0 ? "+" : ""}${r.pct_vs_median}%`}</td>
+                    <td class:list={["num", { "c-empty": r.pct_vs_median == null, "col-blank": hasEst }]} data-label="vs median">{r.pct_vs_median == null ? "—" : `${r.pct_vs_median > 0 ? "+" : ""}${r.pct_vs_median}%`}</td>
+                    <td class:list={["num", { "c-empty": r.est_value == null, "col-blank": !hasEst }]} data-label="Est. value">{money(r.est_value)}</td>
+                    <td class:list={["num", { "c-empty": r.pct_vs_est == null, "col-blank": !hasEst }]} data-label="vs est.">{r.pct_vs_est == null ? "—" : `${r.pct_vs_est > 0 ? "+" : ""}${r.pct_vs_est}%`}</td>
                     <td class="num" data-label="Score">{r.score == null ? "—" : r.score.toFixed(2)}</td>
                     <td class:list={["num", { "c-empty": r.distance_mi == null }]} data-label="≈ mi">{r.distance_mi == null ? "—" : r.distance_mi.toFixed(0)}</td>
                     <td class:list={["c-wide", { "c-empty": !r.condition }]} data-label="Condition">{r.condition ?? "—"}</td>
