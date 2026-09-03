@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.1 — 2026-09-03
+
+- The Deals table drops columns that are empty in every row (`$/unit`
+  for cars, `Seller` on dealer sites) so the photo column and the Hide
+  button fit on a laptop screen without sideways scrolling; the phone
+  Sort menu skips them too.
+
 ## 0.16.0 — 2026-09-03
 
 - Listing photos. Every parser now returns `image_url` (the card's

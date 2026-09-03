@@ -137,7 +137,7 @@ const tabs = [
         const sel = document.createElement("select");
         for (const [i, th] of ths.entries()) {
           const name = th.textContent?.trim();
-          if (!name) continue;
+          if (!name || th.classList.contains("col-blank")) continue;
           const numeric = th.classList.contains("num");
           for (const dir of (numeric ? ["descending", "ascending"] : ["ascending", "descending"]) as Dir[]) {
             const opt = document.createElement("option");

@@ -114,6 +114,7 @@ table.data td { border-bottom: 1px solid var(--grid); padding: 6px 8px; vertical
 table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; }
 table.data tr:hover td { background: color-mix(in oklab, var(--surface-1) 92%, var(--text-primary)); }
 .wrap-x { overflow-x: auto; }
+.col-blank { display: none; } /* a column empty in every row */
 
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: baseline; }
 .linekey { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
