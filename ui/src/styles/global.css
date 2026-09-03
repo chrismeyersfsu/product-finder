@@ -201,3 +201,55 @@ table.data[data-sortable] thead th:focus-visible { outline: 2px solid var(--acce
 .btn-ghost:disabled { opacity: 0.5; cursor: wait; }
 .hide-form { display: inline; margin: 0; }
 .badge-new { border-color: var(--accent); color: var(--accent); margin-left: 6px; vertical-align: 1px; }
+
+/* Narrow screens: no sideways scrolling. Card tables (table.cards)
+ * drop their header and lay each row out as a two-column card with
+ * the listing title across the top, the row's action pinned top-right
+ * so Hide/Unhide is always in reach, and a Sort select standing in for
+ * the hidden sortable header. .c-wide cells take the full width;
+ * .c-minor and .c-empty ("—") cells are dropped on phones. */
+.msort { display: none; }
+@media (max-width: 720px) {
+  .shell { padding: 0 12px 40px; }
+  header.top { flex-wrap: wrap; gap: 6px 16px; padding: 14px 0 10px; }
+  header.top nav { flex-wrap: wrap; gap: 4px 14px; }
+  form.filters { gap: 10px; }
+  form.filters > label, form.filters > .msel-wrap { flex: 1 1 calc(50% - 10px); min-width: 0; }
+  form.filters label.chk { flex-basis: 100%; }
+  form.filters input:not([type="checkbox"]), form.filters select, .msel summary { width: 100%; }
+  .msel-opt { padding: 6px; }
+  form.filters button { flex: 1 1 100%; padding: 9px 14px; }
+  .tiles { grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 14px; }
+  .tile { padding: 8px 10px; }
+  .tile .label { font-size: 11px; line-height: 1.2; }
+  .tile .value { font-size: 18px; }
+  .tile .hint { display: none; }
+  .card { padding: 12px; }
+  .card h2 .sub { display: none; }
+
+  .msort { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); margin: 0 0 8px; }
+  .msort select {
+    flex: 1; background: var(--surface-1); color: var(--text-primary);
+    border: 1px solid var(--baseline); border-radius: 6px; padding: 6px 8px; font: inherit;
+  }
+  table.data.cards { font-size: 13px; }
+  table.data.cards thead { display: none; }
+  table.data.cards, table.data.cards tbody { display: block; }
+  table.data.cards tr {
+    position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px;
+    padding: 10px 0; border-bottom: 1px solid var(--grid);
+  }
+  table.data.cards tr:hover td { background: transparent; }
+  table.data.cards td { display: block; border: 0; padding: 0; min-width: 0; overflow-wrap: anywhere; }
+  table.data.cards td.num { text-align: left; }
+  table.data.cards td[data-label]::before {
+    content: attr(data-label); display: block; font-size: 11px; line-height: 1.2; color: var(--text-muted);
+  }
+  table.data.cards td.c-title, table.data.cards td.c-wide { grid-column: 1 / -1; }
+  table.data.cards td.c-wide { order: 10; } /* full-width cells after the compact ones */
+  table.data.cards td.c-title { padding-right: 72px; font-size: 14px; line-height: 1.35; }
+  table.data.cards td.c-act { position: absolute; top: 8px; right: 0; }
+  table.data.cards td.c-act .btn-ghost { padding: 6px 12px; font-size: 13px; }
+  table.data.cards td.c-minor, table.data.cards td.c-empty { display: none; }
+  table.data.cards .status { white-space: normal; }
+}

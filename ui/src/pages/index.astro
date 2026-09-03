@@ -61,7 +61,7 @@ const back = url.pathname + url.search;
     </label>
     <SiteMultiSelect options={sites} selected={selectedSites} />
     <label title={homeHint ? `Miles from home (${homeHint}); listings with no known location are hidden when set` : "Set a home address with set_home(address) to enable"}>
-      Within{homeHint && <span class="hint"> of {homeHint}</span>}
+      <span>Within{homeHint && <span class="hint"> of {homeHint}</span>}</span>
       <input type="number" name="within" min="1" step="any" inputmode="numeric" value={within ?? ""} placeholder="any mi" disabled={!homeHint} />
     </label>
     <label title="Only listings first seen within this many days">New within
@@ -87,7 +87,7 @@ const back = url.pathname + url.search;
         <div class="card">
           <h2>Best deals <span class="sub">— sorted by score, then price; click $/unit to sort by price per ounce, First seen for newest; Hide removes a row for good (undo on the Hidden page)</span></h2>
           <div class="wrap-x">
-            <table class="data" data-sortable>
+            <table class="data cards" data-sortable>
               <thead>
                 <tr>
                   <th>Listing</th><th>Site</th><th class="num">Price</th>
@@ -101,21 +101,21 @@ const back = url.pathname + url.search;
               <tbody>
                 {rows.map((r) => (
                   <tr>
-                    <td><a href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a>
+                    <td class="c-title"><a href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a>
                       {isNew(r) && <span class="badge badge-new" title={`First seen ${r.first_seen.slice(0, 16).replace("T", " ")} UTC`}>new</span>}
                       {r.hard_fails.length > 0 && <div class="status status-critical"><span class="ic">✗</span>{r.hard_fails.join("; ")}</div>}
                     </td>
-                    <td><span class="swatch" style={`background:${siteVar(r.site_slug, knownSites)}`}></span>{r.site_slug}</td>
-                    <td class="num">{moneyCents(r.price)}</td>
-                    <td class="num">{perUnit(r.unit_price, r.unit)}</td>
-                    <td class="num">{r.pct_vs_median == null ? "—" : `${r.pct_vs_median > 0 ? "+" : ""}${r.pct_vs_median}%`}</td>
-                    <td class="num">{r.score == null ? "—" : r.score.toFixed(2)}</td>
-                    <td class="num">{r.distance_mi == null ? "—" : r.distance_mi.toFixed(0)}</td>
-                    <td>{r.condition ?? "—"}</td>
-                    <td class="num">{r.seller_rating != null ? `${r.seller_rating}%` : "—"}{r.seller_feedback_count != null ? ` (${r.seller_feedback_count.toLocaleString()})` : ""}</td>
-                    <td>{day(r.first_seen)}</td>
-                    <td>{day(r.last_seen)}</td>
-                    <td><HideButton id={r.id} hidden={false} back={back} /></td>
+                    <td data-label="Site"><span class="swatch" style={`background:${siteVar(r.site_slug, knownSites)}`}></span>{r.site_slug}</td>
+                    <td class="num" data-label="Price">{moneyCents(r.price)}</td>
+                    <td class:list={["num", { "c-empty": r.unit_price == null || !r.unit }]} data-label="$/unit">{perUnit(r.unit_price, r.unit)}</td>
+                    <td class:list={["num", { "c-empty": r.pct_vs_median == null }]} data-label="vs median">{r.pct_vs_median == null ? "—" : `${r.pct_vs_median > 0 ? "+" : ""}${r.pct_vs_median}%`}</td>
+                    <td class="num" data-label="Score">{r.score == null ? "—" : r.score.toFixed(2)}</td>
+                    <td class:list={["num", { "c-empty": r.distance_mi == null }]} data-label="≈ mi">{r.distance_mi == null ? "—" : r.distance_mi.toFixed(0)}</td>
+                    <td class:list={["c-wide", { "c-empty": !r.condition }]} data-label="Condition">{r.condition ?? "—"}</td>
+                    <td class="num c-minor" data-label="Seller">{r.seller_rating != null ? `${r.seller_rating}%` : "—"}{r.seller_feedback_count != null ? ` (${r.seller_feedback_count.toLocaleString()})` : ""}</td>
+                    <td data-label="First seen">{day(r.first_seen)}</td>
+                    <td class="c-minor" data-label="Last seen">{day(r.last_seen)}</td>
+                    <td class="c-act"><HideButton id={r.id} hidden={false} back={back} /></td>
                   </tr>
                 ))}
               </tbody>

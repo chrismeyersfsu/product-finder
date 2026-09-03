@@ -78,18 +78,22 @@ const tabs = [
       // sort numerically, first activation descending; text columns
       // case-insensitively, first activation ascending. Nulls ("—" or
       // empty) sort last in both directions; ties keep document order.
-      // Direction is exposed via aria-sort (arrow drawn in CSS).
-      function sortBy(th: HTMLTableCellElement) {
+      // Direction is exposed via aria-sort (arrow drawn in CSS). On
+      // narrow screens `table.cards` hides its header, so each such
+      // table also gets a "Sort" select (built here) that drives the
+      // same function with an explicit direction.
+      type Dir = "ascending" | "descending";
+      function sortBy(th: HTMLTableCellElement, want?: Dir) {
         const table = th.closest("table");
         const tbody = table?.tBodies[0];
         const headRow = th.parentElement;
         if (!table || !tbody || !headRow) return;
         const idx = Array.prototype.indexOf.call(headRow.children, th);
         const numeric = th.classList.contains("num");
-        const first = numeric ? "descending" : "ascending";
-        const dir = th.getAttribute("aria-sort") === first
+        const first: Dir = numeric ? "descending" : "ascending";
+        const dir: Dir = want ?? (th.getAttribute("aria-sort") === first
           ? first === "ascending" ? "descending" : "ascending"
-          : first;
+          : first);
         for (const h of headRow.children) h.removeAttribute("aria-sort");
         th.setAttribute("aria-sort", dir);
         const key = (row: HTMLTableRowElement): number | string | null => {
@@ -124,6 +128,32 @@ const tabs = [
             sortBy(th);
           }
         });
+      }
+      for (const table of document.querySelectorAll<HTMLTableElement>("table[data-sortable].cards")) {
+        const ths = Array.from(table.querySelectorAll<HTMLTableCellElement>("thead th"));
+        const label = document.createElement("label");
+        label.className = "msort";
+        label.append("Sort ");
+        const sel = document.createElement("select");
+        for (const [i, th] of ths.entries()) {
+          const name = th.textContent?.trim();
+          if (!name) continue;
+          const numeric = th.classList.contains("num");
+          for (const dir of (numeric ? ["descending", "ascending"] : ["ascending", "descending"]) as Dir[]) {
+            const opt = document.createElement("option");
+            opt.value = `${i}:${dir}`;
+            opt.textContent = `${name} ${dir === "ascending" ? "\u2191" : "\u2193"}`;
+            if (th.getAttribute("aria-sort") === dir) opt.selected = true;
+            sel.appendChild(opt);
+          }
+        }
+        sel.addEventListener("change", () => {
+          const [i, dir] = sel.value.split(":");
+          const th = ths[Number(i)];
+          if (th) sortBy(th, dir as Dir);
+        });
+        label.appendChild(sel);
+        table.parentElement?.insertBefore(label, table);
       }
     </script>
   </body>

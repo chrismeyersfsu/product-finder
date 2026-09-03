@@ -186,6 +186,9 @@ write is the Hide button, which stamps `listings.hidden_at`):
   as new); `hide_listing` / `unhide_listing` do the same over MCP.
 - **Hidden** (`/hidden`) — every hidden listing, newest first, with an
   Unhide button.
+- On a phone the Deals and Hidden tables become cards (no sideways
+  scrolling) with Hide/Unhide pinned top-right and a Sort select in
+  place of the column headers.
 - **History** (`/history`) — observed prices over time; filled dots are
   real sold prices, rings are asking prices.
 - **Backtests** (`/backtests`) — every stored backtest, visualized:

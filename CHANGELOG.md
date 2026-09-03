@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15.1 — 2026-09-03
+
+- Phone layout. Under 720px the Deals and Hidden tables stop scrolling
+  sideways: each listing is a card — title across the top, Hide/Unhide
+  pinned top-right so it is always in reach, the numbers in a
+  three-column grid with their labels, condition full-width, and
+  empty ("—") or minor (seller, last seen) fields dropped. A Sort
+  select stands in for the hidden sortable header. Filters go two per
+  row with a full-width Apply; KPI tiles shrink to three per row.
+
 ## 0.15.0 — 2026-09-03
 
 - Deals page: a sortable **First seen** column, a `new` badge on
