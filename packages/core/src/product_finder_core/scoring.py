@@ -7,15 +7,21 @@ earn 0 but only a *present, contradicting* value hard-fails a required
 rule, and extract_attrs() is case-insensitive over title+description.
 
 Extractor spec (product.extractors), field name -> spec:
-  {"pattern": regex, "type": "int"|"float"|"str"|"bool"|"size_gb", "group": 1}
+  {"pattern": regex, "type": "int"|"float"|"str"|"bool"|"size_gb", "group": 1,
+   "fields": ["title"]}
 "bool" means presence of the pattern; "size_gb" reads `(\\d+) (gb|tb)`
-from groups 1 and 2 and normalizes to GB.
+from groups 1 and 2 and normalizes to GB. "fields" names which listing
+fields the pattern searches (joined with " | "); the default is the
+title alone, and a field the caller did not supply is skipped.
 
 Criteria rule (product.criteria), one dict per rule:
   {"field": name, "op": op, "value": v, "weight": 1.0,
    "required": false, "reject": false, "note": ""}
 A violated required rule flags the listing (hard_fails); a violated
 reject rule means the row is not the product at all — see rejected().
+A violated rule with "flag": true still scores normally but its note
+is surfaced on the row (flags) — for facts the buyer should see, such
+as a salvage title, that are not deal-breakers; see flags().
 ops: gte, lte, eq, contains, one_of, matches, exists.
 Fields resolve from listing attrs first, then listing columns
 (price, seller_rating, seller_feedback_count, condition, ...).
@@ -34,10 +40,16 @@ from statistics import median
 OPS = ("gte", "lte", "eq", "contains", "one_of", "matches", "exists")
 
 
-def extract_attrs(text: str, extractors: dict) -> dict:
+def extract_attrs(text: str, extractors: dict, extra: dict | None = None) -> dict:
+    """Run every extractor over the title (`text`); a spec with "fields"
+    searches the named listing fields out of `extra` (title included)."""
     attrs: dict = {}
     for field, spec in extractors.items():
-        m = re.search(spec["pattern"], text, re.IGNORECASE)
+        haystack = text
+        if spec.get("fields"):
+            parts = [text if f == "title" else (extra or {}).get(f) for f in spec["fields"]]
+            haystack = " | ".join(str(p) for p in parts if p)
+        m = re.search(spec["pattern"], haystack, re.IGNORECASE)
         kind = spec.get("type", "str")
         if kind == "bool":
             attrs[field] = m is not None
@@ -51,9 +63,9 @@ def extract_attrs(text: str, extractors: dict) -> dict:
         else:
             raw = m.group(spec.get("group", 1) if m.groups() else 0)
             if kind == "int":
-                attrs[field] = int(raw)
+                attrs[field] = int(raw.replace(",", ""))  # "62,000 mi"
             elif kind == "float":
-                attrs[field] = float(raw)
+                attrs[field] = float(raw.replace(",", ""))
             else:
                 attrs[field] = raw.strip().lower()
     return attrs
@@ -96,6 +108,23 @@ def rejected(merged: dict, criteria: list[dict]) -> str | None:
         except (TypeError, ValueError):
             continue
     return None
+
+
+def flags(merged: dict, criteria: list[dict]) -> list[str]:
+    """Notes of violated flag-rules — shown on the row, never hiding it."""
+    out = []
+    for rule in criteria:
+        if not rule.get("flag"):
+            continue
+        actual = merged.get(rule["field"])
+        if actual is None:
+            continue
+        try:
+            if not _passes(rule["op"], actual, rule.get("value")):
+                out.append(rule.get("note") or rule["field"])
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def score_listing(merged: dict, criteria: list[dict]) -> tuple[float, list[str]]:

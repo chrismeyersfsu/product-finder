@@ -192,3 +192,18 @@ def test_set_est_values_rewrites_the_whole_product(tmp_path):
         b: None,
     }
     assert [r["attrs"] for r in storage.product_listings(conn, "w")] == [{"year": 2020}, {}]
+
+
+def test_flags_round_trip_and_rescore(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_product(conn, {"slug": "w"})
+    li = {"product_slug": "w", "site_slug": "ebay", "url": "http://x/1"}
+    a = storage.upsert_listing(conn, {**li, "flags": ["salvage title"]})
+    assert storage.query_listings(conn, "w")[0]["flags"] == ["salvage title"]
+    storage.upsert_listing(conn, li)  # a rescrape without the flag clears it
+    assert storage.query_listings(conn, "w")[0]["flags"] == []
+    storage.set_listing_scoring(conn, a, {"salvage": True}, 0.5, [], ["salvage title"])
+    (row,) = storage.product_listings(conn, "w")
+    assert (row["attrs"], row["score"], row["flags"]) == ({"salvage": True}, 0.5, ["salvage title"])
+    storage.delete_listing(conn, a)
+    assert storage.product_listings(conn, "w") == []

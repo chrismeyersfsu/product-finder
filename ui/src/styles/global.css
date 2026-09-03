@@ -15,6 +15,7 @@
   --up-good: #006300;
   --status-good: #0ca30c;
   --status-warning: #fab219;
+  --status-warning-ink: #8a5f00;
   --status-serious: #ec835a;
   --status-critical: #d03b3b;
   --div-pos: #2a78d6;
@@ -33,6 +34,7 @@
     --border: rgba(255, 255, 255, 0.1);
     --accent: #3987e5;
     --up-good: #0ca30c;
+    --status-warning-ink: var(--status-warning);
     --div-pos: #3987e5;
     --div-neg: #e66767;
   }
@@ -49,6 +51,7 @@
   --border: rgba(255, 255, 255, 0.1);
   --accent: #3987e5;
   --up-good: #0ca30c;
+  --status-warning-ink: var(--status-warning);
   --div-pos: #3987e5;
   --div-neg: #e66767;
 }
@@ -120,9 +123,10 @@ table.data tr:hover td { background: color-mix(in oklab, var(--surface-1) 92%, v
 .linekey { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-secondary); margin: 8px 0 0; }
 .badge { display: inline-block; font-size: 11px; border-radius: 10px; padding: 1px 8px; border: 1px solid var(--baseline); color: var(--text-secondary); }
-.status { font-size: 12px; white-space: nowrap; }
+.status { font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
 .status .ic { margin-right: 4px; }
 .status-good { color: var(--status-good); }
+.status-warning { color: var(--status-warning-ink); }
 .status-critical { color: var(--status-critical); }
 .status-muted { color: var(--text-muted); }
 

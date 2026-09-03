@@ -133,7 +133,7 @@ def test_project_tools_scoped_to_root(tmp_path, monkeypatch):
 
 
 def test_tools_registered():
-    assert len(server.TOOLS) == 29
+    assert len(server.TOOLS) == 30
 
 
 def test_home_and_distances(monkeypatch):
@@ -288,3 +288,53 @@ def test_run_search_fits_market_values_for_car_products(monkeypatch):
     assert abs(newest["pct_vs_est"]) < 5 and abs(oldest["pct_vs_est"]) < 5
     assert all(r.get("est_value") is None for r in deals if r["url"].startswith("http"))
     assert server.backfill_market_values()["cars"] == 12
+
+
+def test_rescore_product_applies_edited_extractors_and_flags():
+    server.seed_defaults()
+    conn = server._connect()
+    storage.upsert_product(conn, {"slug": "cars", "name": "Cars", "queries": ["car"]})
+    li = {"product_slug": "cars", "site_slug": "ebay", "title": "2019 Car, 30000 mi"}
+    storage.upsert_listing(conn, {**li, "url": "e://1", "condition": "used; Wreck City Motors"})
+    storage.upsert_listing(conn, {**li, "url": "e://2", "condition": "used; Honest Al"})
+    storage.upsert_listing(conn, {**li, "url": "e://3", "title": "Car bumper"})
+    # the product learns a salvage-dealer extractor over title+condition, a flag rule,
+    # and a reject rule for parts — then every stored row is rescored
+    server.add_product(
+        "cars",
+        "Cars",
+        queries=["car"],
+        extractors={
+            "salvage": {
+                "pattern": "salvage|wreck city",
+                "type": "bool",
+                "fields": ["title", "condition"],
+            },
+            "is_parts": {"pattern": "bumper", "type": "bool"},
+        },
+        criteria=[
+            {
+                "field": "salvage",
+                "op": "eq",
+                "value": False,
+                "weight": 2,
+                "flag": True,
+                "note": "salvage",
+            },
+            {
+                "field": "is_parts",
+                "op": "eq",
+                "value": False,
+                "weight": 0,
+                "reject": True,
+                "note": "parts",
+            },
+        ],
+    )
+    assert server.rescore_product("cars") == {"rescored": 2, "rejected": 1, "valued": 0}
+    rows = {r["url"]: r for r in server.query_listings("cars", limit=10)}
+    assert set(rows) == {"e://1", "e://2"}
+    assert rows["e://1"]["flags"] == ["salvage"] and rows["e://1"]["attrs"]["salvage"] is True
+    assert rows["e://2"]["flags"] == [] and rows["e://2"]["score"] == 1.0
+    assert rows["e://1"]["score"] < rows["e://2"]["score"]
+    assert server.rescore_product("nope") == {"error": "no product: nope"}

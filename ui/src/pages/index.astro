@@ -117,6 +117,7 @@ const hasEst = rows.some((r) => r.est_value != null);
                           <a href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a>
                           {isNew(r) && <span class="badge badge-new" title={`First seen ${r.first_seen.slice(0, 16).replace("T", " ")} UTC`}>new</span>}
                           {r.hard_fails.length > 0 && <div class="status status-critical"><span class="ic">✗</span>{r.hard_fails.join("; ")}</div>}
+                          {r.flags.length > 0 && <div class="status status-warning"><span class="ic">⚠</span>{r.flags.join("; ")}</div>}
                         </div>
                       </div>
                     </td>

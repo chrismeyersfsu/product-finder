@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS listings (
   hidden_at TEXT,
   image_url TEXT,
   est_value REAL,
+  flags TEXT NOT NULL DEFAULT '[]',
   UNIQUE(product_slug, url)
 );
 CREATE TABLE IF NOT EXISTS settings (
@@ -140,6 +141,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE listings ADD COLUMN image_url TEXT")
     if "est_value" not in cols:
         conn.execute("ALTER TABLE listings ADD COLUMN est_value REAL")
+    if "flags" not in cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN flags TEXT NOT NULL DEFAULT '[]'")
     conn.commit()
 
 
@@ -260,6 +263,7 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> int:
         "attrs": json.dumps(listing.get("attrs", {})),
         "score": listing.get("score"),
         "hard_fails": json.dumps(listing.get("hard_fails", [])),
+        "flags": json.dumps(listing.get("flags", [])),
         "distance_mi": listing.get("distance_mi"),
         "unit_qty": listing.get("unit_qty"),
         "unit": listing.get("unit"),
@@ -270,18 +274,18 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> int:
     cur = conn.execute(
         """INSERT INTO listings (product_slug, site_slug, url, title, price, currency,
                                  condition, location, seller_rating, seller_feedback_count,
-                                 attrs, score, hard_fails, distance_mi,
+                                 attrs, score, hard_fails, flags, distance_mi,
                                  unit_qty, unit, unit_price, image_url, first_seen, last_seen)
            VALUES (:product_slug, :site_slug, :url, :title, :price, :currency,
                    :condition, :location, :seller_rating, :seller_feedback_count,
-                   :attrs, :score, :hard_fails, :distance_mi,
+                   :attrs, :score, :hard_fails, :flags, :distance_mi,
                    :unit_qty, :unit, :unit_price, :image_url, :now, :now)
            ON CONFLICT(product_slug, url) DO UPDATE SET
              title=excluded.title, price=excluded.price, condition=excluded.condition,
              location=excluded.location, seller_rating=excluded.seller_rating,
              seller_feedback_count=excluded.seller_feedback_count,
              attrs=excluded.attrs, score=excluded.score, hard_fails=excluded.hard_fails,
-             distance_mi=excluded.distance_mi, unit_qty=excluded.unit_qty,
+             flags=excluded.flags, distance_mi=excluded.distance_mi, unit_qty=excluded.unit_qty,
              unit=excluded.unit, unit_price=excluded.unit_price,
              image_url=COALESCE(excluded.image_url, listings.image_url),
              last_seen=excluded.last_seen""",
@@ -301,6 +305,25 @@ def set_listing_units(conn: sqlite3.Connection, listing_id: int, units: dict) ->
         "UPDATE listings SET unit_qty=?, unit=?, unit_price=? WHERE id=?",
         (units.get("unit_qty"), units.get("unit"), units.get("unit_price"), listing_id),
     )
+
+
+def set_listing_scoring(
+    conn: sqlite3.Connection,
+    listing_id: int,
+    attrs: dict,
+    score: float,
+    hard_fails: list,
+    flags: list,
+) -> None:
+    """Rewrite one row's extracted attrs and everything scored from them."""
+    conn.execute(
+        "UPDATE listings SET attrs=?, score=?, hard_fails=?, flags=? WHERE id=?",
+        (json.dumps(attrs), score, json.dumps(hard_fails), json.dumps(flags), listing_id),
+    )
+
+
+def delete_listing(conn: sqlite3.Connection, listing_id: int) -> None:
+    conn.execute("DELETE FROM listings WHERE id=?", (listing_id,))
 
 
 def set_listing_hidden(conn: sqlite3.Connection, listing_id: int, hidden: bool) -> bool:
@@ -351,6 +374,7 @@ def _row_to_listing(row: sqlite3.Row) -> dict:
     d = dict(row)
     d["attrs"] = json.loads(d["attrs"])
     d["hard_fails"] = json.loads(d["hard_fails"])
+    d["flags"] = json.loads(d.get("flags") or "[]")
     return d
 
 

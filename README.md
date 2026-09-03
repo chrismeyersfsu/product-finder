@@ -42,6 +42,8 @@ claude mcp add --transport http product-finder http://localhost:8848/mcp
   the product's manual checks (battery health, keyboard wear, ...)
 - `backfill_market_values` — refit every product's market-value model
   (see *Used-car dealer sites*); `run_search` does this per product
+- `rescore_product` — re-run a product's extractors and criteria over
+  its stored listings after editing them
 - `project_list_files` / `project_read_file` / `project_write_file` /
   `project_run_ci` — modify this project itself over MCP, scoped to
   the repo root
@@ -135,12 +137,21 @@ A product is four pieces of data (see the worked example in
 
 - **queries** — strings sent to each site's search page
 - **extractors** — `field -> {pattern, type}` regexes pulled from
-  listing titles (`int`, `float`, `str`, `bool`, `size_gb`)
+  listing titles (`int`, `float`, `str`, `bool`, `size_gb`); add
+  `fields: ["title", "condition"]` to search other listing fields too
+  (the car products catch a known salvage dealer in the seller name
+  that way)
 - **criteria** — weighted rules `{field, op, value, weight, required}`
   with ops `gte/lte/eq/contains/one_of/matches/exists`; score is
   earned-weight / total-weight, and a *present* value contradicting a
-  `required` rule hard-fails the listing (missing = unknown, not fail)
+  `required` rule hard-fails the listing (missing = unknown, not fail).
+  `reject: true` drops non-product rows at ingest; `flag: true` keeps
+  the row but surfaces the note on it (a salvage title is a flag, not
+  a hard fail — you want to see the car and the discount)
 - **manual_checks** — things only a human can verify before buying
+
+After editing a product, `rescore_product(slug)` re-applies its
+extractors and criteria to every stored listing.
 
 ## Packages
 
@@ -193,7 +204,8 @@ write is the Hide button, which stamps `listings.hidden_at`):
 - **Deals** (`/`) — filterable best-deals table with KPI tiles and the
   product's verify-by-hand checklist, each listing with its photo. Car
   products show **Est. value** / **vs est.** (the fitted market value
-  above) in place of **vs median**. A
+  above) in place of **vs median**, and a ⚠ line for anything a `flag`
+  criterion caught (salvage / rebuilt title). A
   **First seen** column and a
   `new` badge (first seen in the last 2 days) surface fresh listings;
   "New within N days" keeps only those. **Hide** drops a listing from

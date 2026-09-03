@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.18.0 — 2026-09-03
+
+- Deals rows now show a warning line for product `flag` criteria —
+  first use: salvage / rebuilt / branded-title cars (detected from the
+  title or a known salvage dealer in the seller field) stay in the
+  deals list with a ⚠ salvage note and a lower score instead of being
+  dropped; new `rescore_product` MCP tool re-applies edited
+  extractors/criteria to stored rows.
+- Extractors: `int`/`float` values accept thousands separators
+  ("62,000 mi"), and a spec's `fields` list can search listing fields
+  beyond the title.
+
 ## 0.17.0 — 2026-09-03
 
 - Deals table: products whose listings carry year and mileage (cars)

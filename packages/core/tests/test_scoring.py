@@ -126,3 +126,49 @@ def test_annotate_deals_adds_pct_vs_est_when_present():
     scoring.annotate_deals(rows)
     assert rows[0]["pct_vs_est"] == -10.0
     assert "pct_vs_est" not in rows[1]
+
+
+def test_extractor_fields_search_named_listing_fields():
+    ex = {
+        "salvage": {
+            "pattern": "salvage|wreck city motors",
+            "type": "bool",
+            "fields": ["title", "condition"],
+        }
+    }
+    assert scoring.extract_attrs(
+        "2019 Prius, 40000 mi", ex, {"condition": "used; Wreck City Motors"}
+    )
+    assert not scoring.extract_attrs(
+        "2019 Prius, 40000 mi", ex, {"condition": "used; Toyota of Durham"}
+    )["salvage"]
+    assert not scoring.extract_attrs("2019 Prius", ex)["salvage"]  # no extra: title alone
+    assert scoring.extract_attrs("Salvage 2019 Prius", ex)["salvage"]
+
+
+def test_flag_rules_surface_a_note_without_hiding_the_row():
+    criteria = [
+        {
+            "field": "salvage",
+            "op": "eq",
+            "value": False,
+            "weight": 2,
+            "flag": True,
+            "note": "salvage title",
+        },
+        {"field": "year", "op": "gte", "value": 2016, "weight": 3, "required": True},
+    ]
+    clean = {"salvage": False, "year": 2018}
+    wrecked = {"salvage": True, "year": 2018}
+    assert scoring.flags(clean, criteria) == []
+    assert scoring.flags(wrecked, criteria) == ["salvage title"]
+    assert scoring.flags({"year": 2018}, criteria) == []  # unknown is not a flag
+    assert scoring.rejected(wrecked, criteria) is None
+    score, hard_fails = scoring.score_listing(wrecked, criteria)
+    assert hard_fails == [] and score == 0.6  # loses the rule's weight, stays in deals
+
+
+def test_int_extractors_accept_thousands_separators():
+    ex = {"mileage": {"pattern": r"\b(\d{1,3}(?:,\d{3})+|\d{4,6})\s*(?:mi\b|miles)", "type": "int"}}
+    assert scoring.extract_attrs("2015 Avalon XLE 62,000 mi", ex) == {"mileage": 62000}
+    assert scoring.extract_attrs("2015 Avalon XLE 62000 miles", ex) == {"mileage": 62000}

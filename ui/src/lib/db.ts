@@ -30,6 +30,7 @@ export interface Listing {
   seller_feedback_count: number | null;
   score: number | null;
   hard_fails: string[];
+  flags: string[];
   distance_mi: number | null;
   unit_qty: number | null;
   unit: "oz" | "ct" | null;
@@ -161,7 +162,11 @@ export function deals(productSlug: string, f: DealFilters = {}): Listing[] {
     args.push(f.limit ?? 100);
     return db.prepare(sql).all(...args);
   });
-  const listings: Listing[] = rows.map((r: any) => ({ ...r, hard_fails: JSON.parse(r.hard_fails) }));
+  const listings: Listing[] = rows.map((r: any) => ({
+    ...r,
+    hard_fails: JSON.parse(r.hard_fails),
+    flags: JSON.parse(r.flags ?? "[]"),
+  }));
   const prices = listings.map((l) => l.price).filter((p): p is number => p != null && p > 0);
   if (prices.length) {
     const sorted = [...prices].sort((a, b) => a - b);
@@ -188,7 +193,11 @@ export function hiddenListings(productSlug?: string): HiddenListing[] {
     const args: unknown[] = [];
     if (productSlug) { sql += " AND l.product_slug = ?"; args.push(productSlug); }
     sql += " ORDER BY l.hidden_at DESC, l.id DESC";
-    return db.prepare(sql).all(...args).map((r: any) => ({ ...r, hard_fails: JSON.parse(r.hard_fails) }));
+    return db.prepare(sql).all(...args).map((r: any) => ({
+      ...r,
+      hard_fails: JSON.parse(r.hard_fails),
+      flags: JSON.parse(r.flags ?? "[]"),
+    }));
   });
 }
 

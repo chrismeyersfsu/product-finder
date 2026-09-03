@@ -66,9 +66,12 @@ def add_product(
     """Create or update a product to search for.
 
     queries: search strings sent to each site. extractors: field ->
-    {pattern, type} regexes pulled from listing titles. criteria:
-    weighted rules {field, op, value, weight, required, note} with ops
-    gte/lte/eq/contains/one_of/matches/exists. See the seeded
+    {pattern, type, fields} regexes pulled from listing titles (or the
+    listing fields named in `fields`, e.g. ["title", "condition"]).
+    criteria: weighted rules {field, op, value, weight, required,
+    reject, flag, note} with ops gte/lte/eq/contains/one_of/matches/
+    exists; a violated `flag` rule shows its note on the row without
+    hiding it. See the seeded
     thin-client-laptop product for a full example. sites: site slugs
     this product is searched on; empty means every enabled site.
     """
@@ -216,7 +219,7 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
     counts: dict[str, int] = {}
     rejected = 0
     for li in result["listings"]:
-        attrs = scoring.extract_attrs(li["title"], product["extractors"])
+        attrs = scoring.extract_attrs(li["title"], product["extractors"], li)
         merged = {**{k: v for k, v in li.items() if k not in ("attrs",)}, **attrs}
         if scoring.rejected(merged, product["criteria"]):
             rejected += 1
@@ -230,6 +233,7 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
                 "attrs": attrs,
                 "score": round(score, 3),
                 "hard_fails": hard_fails,
+                "flags": scoring.flags(merged, product["criteria"]),
                 "distance_mi": cache.distance_mi(home, li.get("location")) if cache else None,
                 **units.unit_price(li.get("price"), li["title"]),
             },
@@ -257,6 +261,32 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
     storage.record_search_run(conn, product_slug, summary)
     summary["valued"] = _refresh_market_values(conn, product_slug)
     return summary
+
+
+def rescore_product(product_slug: str) -> dict:
+    """Re-run the product's extractors and criteria over every stored
+    listing (after editing them with add_product): attrs, score,
+    hard_fails and flags are rewritten, rows the criteria now reject
+    are deleted, and the market-value model is refitted."""
+    conn = _connect()
+    product = storage.get_product(conn, product_slug)
+    if not product:
+        return {"error": f"no product: {product_slug}"}
+    rescored = rejected = 0
+    for li in storage.product_listings(conn, product_slug):
+        attrs = scoring.extract_attrs(li["title"], product["extractors"], li)
+        merged = {**{k: v for k, v in li.items() if k not in ("attrs",)}, **attrs}
+        if scoring.rejected(merged, product["criteria"]):
+            storage.delete_listing(conn, li["id"])
+            rejected += 1
+            continue
+        score, hard_fails = scoring.score_listing(merged, product["criteria"])
+        flags = scoring.flags(merged, product["criteria"])
+        storage.set_listing_scoring(conn, li["id"], attrs, round(score, 3), hard_fails, flags)
+        rescored += 1
+    conn.commit()
+    valued = _refresh_market_values(conn, product_slug)
+    return {"rescored": rescored, "rejected": rejected, "valued": valued}
 
 
 def backfill_market_values() -> dict:
@@ -559,6 +589,7 @@ TOOLS = [
     backfill_distances,
     backfill_unit_prices,
     backfill_market_values,
+    rescore_product,
     seed_defaults,
     backfill_ebay_sold,
     add_price_observation,
