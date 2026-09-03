@@ -1,4 +1,5 @@
-# Dashboard UI (Astro SSR + better-sqlite3, read-only on the shared db).
+# Dashboard UI (Astro SSR + better-sqlite3 on the shared db; its only write is
+# the Hide button's listings.hidden_at stamp).
 # Build:  docker build -f Dockerfile.ui -t product-finder-ui .
 FROM node:22-slim AS build
 WORKDIR /app

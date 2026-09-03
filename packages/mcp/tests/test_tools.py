@@ -6,6 +6,7 @@ External HTTP is faked at the sites package's fetch._get seam.
 from pathlib import Path
 
 import pytest
+from product_finder_core import storage
 from product_finder_mcp import server
 from product_finder_sites import fetch
 
@@ -132,11 +133,10 @@ def test_project_tools_scoped_to_root(tmp_path, monkeypatch):
 
 
 def test_tools_registered():
-    assert len(server.TOOLS) == 25
+    assert len(server.TOOLS) == 28
 
 
 def test_home_and_distances(monkeypatch):
-    from product_finder_core import storage
     from product_finder_geo import geo
 
     # Street addresses are not in the gazetteer; fake the Nominatim seam.
@@ -204,3 +204,39 @@ def test_run_search_stores_unit_price_and_backfills(monkeypatch):
     conn.commit()
     assert server.backfill_unit_prices() == {"listings": 3, "with_unit_price": 3}
     assert server.query_listings("shakes")[0]["unit_price"] is not None
+
+
+def test_hide_listing_drops_it_from_deals_until_unhidden():
+    server.seed_defaults()
+    conn = server._connect()
+    base = {"product_slug": "thin-client-laptop", "site_slug": "ebay", "score": 0.9, "price": 5.0}
+    a = storage.upsert_listing(conn, {**base, "url": "e://1", "title": "keep"})
+    b = storage.upsert_listing(conn, {**base, "url": "e://2", "title": "junk"})
+    assert server.hide_listing(b) == {"id": b, "hidden": True}
+    assert [r["id"] for r in server.best_deals("thin-client-laptop")["deals"]] == [a]
+    assert [r["id"] for r in server.query_listings("thin-client-laptop")] == [a]
+    assert [r["id"] for r in server.query_listings("thin-client-laptop", include_hidden=True)] == [
+        a,
+        b,
+    ]
+    assert [r["title"] for r in server.hidden_listings("thin-client-laptop")] == ["junk"]
+    assert server.unhide_listing(b)["hidden"] is False
+    assert len(server.best_deals("thin-client-laptop")["deals"]) == 2
+    assert "error" in server.hide_listing(12345)
+
+
+def test_new_within_days_filters_on_first_seen():
+    server.seed_defaults()
+    conn = server._connect()
+    base = {"product_slug": "thin-client-laptop", "site_slug": "ebay", "score": 0.9, "price": 5.0}
+    storage.upsert_listing(conn, {**base, "url": "e://old"})
+    conn.execute("UPDATE listings SET first_seen='2020-01-01T00:00:00+00:00'")
+    conn.commit()
+    storage.upsert_listing(conn, {**base, "url": "e://new"})
+    assert [r["url"] for r in server.query_listings("thin-client-laptop", new_within_days=1)] == [
+        "e://new"
+    ]
+    assert [
+        r["url"] for r in server.best_deals("thin-client-laptop", new_within_days=1)["deals"]
+    ] == ["e://new"]
+    assert len(server.query_listings("thin-client-laptop")) == 2

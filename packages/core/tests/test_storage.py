@@ -132,3 +132,33 @@ def test_listing_unit_price_columns(tmp_path):
     storage.set_listing_units(conn, lid, {"unit_qty": 12.0, "unit": "ct", "unit_price": 0.5375})
     assert storage.query_listings(conn, "w")[0]["unit"] == "ct"
     assert storage.listings_for_units(conn) == [{"id": lid, "title": "", "price": 6.45}]
+
+
+def test_hidden_listings_survive_rescrape_and_drop_from_queries(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_product(conn, {"slug": "w"})
+    li = {"product_slug": "w", "site_slug": "ebay", "url": "http://x/3", "score": 0.5}
+    lid = storage.upsert_listing(conn, li)
+    assert storage.set_listing_hidden(conn, lid, True)
+    assert storage.query_listings(conn, "w") == []
+    assert [r["id"] for r in storage.query_listings(conn, "w", include_hidden=True)] == [lid]
+    stamp = storage.hidden_listings(conn)[0]["hidden_at"]
+    storage.upsert_listing(conn, {**li, "price": 1.0})  # a later scrape refreshes the row
+    assert storage.set_listing_hidden(conn, lid, True)  # idempotent: stamp is kept
+    assert storage.hidden_listings(conn, "w")[0]["hidden_at"] == stamp
+    assert storage.query_listings(conn, "w") == []
+    assert storage.set_listing_hidden(conn, lid, False)
+    assert len(storage.query_listings(conn, "w")) == 1
+    assert storage.hidden_listings(conn) == []
+    assert not storage.set_listing_hidden(conn, 999, True)
+
+
+def test_query_first_seen_since(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_product(conn, {"slug": "w"})
+    storage.upsert_listing(conn, {"product_slug": "w", "site_slug": "ebay", "url": "http://x/4"})
+    conn.execute("UPDATE listings SET first_seen='2020-01-01T00:00:00+00:00'")
+    storage.upsert_listing(conn, {"product_slug": "w", "site_slug": "ebay", "url": "http://x/5"})
+    rows = storage.query_listings(conn, "w", first_seen_since="2021-01-01T00:00:00+00:00")
+    assert [r["url"] for r in rows] == ["http://x/5"]
+    assert len(storage.query_listings(conn, "w")) == 2

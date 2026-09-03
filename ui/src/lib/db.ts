@@ -1,10 +1,11 @@
 /**
- * Read-only data access for the UI. Owns every SQL statement in the UI
- * and nothing else: opens the product-finder SQLite db readonly, never
- * writes, never creates it, and renders "no db yet" as empty results
- * rather than throwing. Server-side only — never import from client
- * scripts. Schema is owned by packages/core (storage.py); this module
- * only reads it.
+ * Read-only data access for the UI. Owns every SELECT in the UI and
+ * nothing else: opens the product-finder SQLite db readonly, never
+ * writes (src/lib/hide.ts owns the UI's one write), never creates it,
+ * and renders "no db yet" as empty results rather than throwing.
+ * Server-side only — never import from client scripts. Schema is owned
+ * by packages/core (storage.py); this module only reads it. Deals never
+ * include hidden listings (hidden_at set).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -33,7 +34,9 @@ export interface Listing {
   unit_qty: number | null;
   unit: "oz" | "ct" | null;
   unit_price: number | null;
+  first_seen: string;
   last_seen: string;
+  hidden_at: string | null;
   median_price?: number;
   pct_vs_median?: number;
 }
@@ -78,6 +81,18 @@ export interface DealFilters {
   limit?: number;
   /** Miles from home; rows with no known distance are dropped when set. */
   maxDistance?: number;
+  /** Only listings first seen within this many days. */
+  newWithinDays?: number;
+}
+/** A hidden listing with its product's name, for the Hidden page. */
+export interface HiddenListing extends Listing {
+  product_slug: string;
+  product_name: string;
+}
+
+/** ISO timestamp `days` ago, in the same UTC form storage.py writes. */
+export function sinceIso(days: number): string {
+  return new Date(Date.now() - days * 86400e3).toISOString().slice(0, 19) + "+00:00";
 }
 
 function dbPath(): string | null {
@@ -128,8 +143,9 @@ export function listProducts(): Product[] {
 
 export function deals(productSlug: string, f: DealFilters = {}): Listing[] {
   const rows = withDb([] as any[], (db) => {
-    let sql = "SELECT * FROM listings WHERE product_slug = ?";
+    let sql = "SELECT * FROM listings WHERE product_slug = ? AND hidden_at IS NULL";
     const args: unknown[] = [productSlug];
+    if (f.newWithinDays != null) { sql += " AND first_seen >= ?"; args.push(sinceIso(f.newWithinDays)); }
     if (f.minScore != null) { sql += " AND score >= ?"; args.push(f.minScore); }
     if (f.maxPrice != null) { sql += " AND price IS NOT NULL AND price <= ?"; args.push(f.maxPrice); }
     if (f.sites?.length) {
@@ -155,6 +171,19 @@ export function deals(productSlug: string, f: DealFilters = {}): Listing[] {
       }
   }
   return listings;
+}
+
+/** Every hidden listing, most recently hidden first. */
+export function hiddenListings(productSlug?: string): HiddenListing[] {
+  return withDb([] as HiddenListing[], (db) => {
+    let sql =
+      "SELECT l.*, p.name AS product_name FROM listings l JOIN products p ON p.slug = l.product_slug" +
+      " WHERE l.hidden_at IS NOT NULL";
+    const args: unknown[] = [];
+    if (productSlug) { sql += " AND l.product_slug = ?"; args.push(productSlug); }
+    sql += " ORDER BY l.hidden_at DESC, l.id DESC";
+    return db.prepare(sql).all(...args).map((r: any) => ({ ...r, hard_fails: JSON.parse(r.hard_fails) }));
+  });
 }
 
 export function listingSites(productSlug: string): string[] {

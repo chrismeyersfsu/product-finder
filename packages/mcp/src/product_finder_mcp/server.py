@@ -13,6 +13,7 @@ import argparse
 import fnmatch
 import os
 import subprocess
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
@@ -265,10 +266,14 @@ def query_listings(
     limit: int = 25,
     include_hard_fails: bool = False,
     max_distance_mi: float | None = None,
+    new_within_days: float | None = None,
+    include_hidden: bool = False,
 ) -> list[dict]:
     """Query stored listings, best score first then cheapest.
     max_distance_mi keeps only listings within that many miles of home
-    (listings with no known location are excluded when it is set)."""
+    (listings with no known location are excluded when it is set).
+    new_within_days keeps only listings first seen that recently; rows
+    hidden with hide_listing() are omitted unless include_hidden."""
     return storage.query_listings(
         _connect(),
         product_slug,
@@ -278,18 +283,58 @@ def query_listings(
         include_hard_fails=include_hard_fails,
         limit=limit,
         max_distance_mi=max_distance_mi,
+        include_hidden=include_hidden,
+        first_seen_since=_since(new_within_days),
     )
 
 
-def best_deals(product_slug: str, limit: int = 10, max_distance_mi: float | None = None) -> dict:
+def _since(days: float | None) -> str | None:
+    if days is None:
+        return None
+    return (datetime.now(UTC) - timedelta(days=days)).isoformat(timespec="seconds")
+
+
+def hide_listing(listing_id: int) -> dict:
+    """Hide a listing from query_listings/best_deals and the Deals page.
+    The row stays (and keeps refreshing on scrapes) so it never comes back
+    as "new"; unhide_listing() reverses it. Also on the dashboard's Hidden page."""
+    ok = storage.set_listing_hidden(_connect(), listing_id, True)
+    return {"id": listing_id, "hidden": True} if ok else {"error": f"no listing: {listing_id}"}
+
+
+def unhide_listing(listing_id: int) -> dict:
+    """Put a hidden listing back into deals."""
+    ok = storage.set_listing_hidden(_connect(), listing_id, False)
+    return {"id": listing_id, "hidden": False} if ok else {"error": f"no listing: {listing_id}"}
+
+
+def hidden_listings(product_slug: str | None = None) -> list[dict]:
+    """Every hidden listing (optionally one product's), most recently hidden first."""
+    return storage.hidden_listings(_connect(), product_slug)
+
+
+def best_deals(
+    product_slug: str,
+    limit: int = 10,
+    max_distance_mi: float | None = None,
+    new_within_days: float | None = None,
+) -> dict:
     """Top-scored listings with price-vs-median context, plus the
     product's manual checks to verify before buying. max_distance_mi
-    restricts to listings within that many miles of home."""
+    restricts to listings within that many miles of home;
+    new_within_days to listings first seen that recently (the median is
+    still taken over that subset). Hidden listings never appear."""
     conn = _connect()
     product = storage.get_product(conn, product_slug)
     if not product:
         return {"error": f"no product: {product_slug}"}
-    rows = storage.query_listings(conn, product_slug, limit=200, max_distance_mi=max_distance_mi)
+    rows = storage.query_listings(
+        conn,
+        product_slug,
+        limit=200,
+        max_distance_mi=max_distance_mi,
+        first_seen_since=_since(new_within_days),
+    )
     scoring.annotate_deals(rows)
     return {"deals": rows[:limit], "manual_checks": product["manual_checks"]}
 
@@ -485,6 +530,9 @@ TOOLS = [
     run_search,
     query_listings,
     best_deals,
+    hide_listing,
+    unhide_listing,
+    hidden_listings,
     set_home,
     get_home,
     backfill_distances,

@@ -6,7 +6,10 @@ settings table (home location). Never does network I/O and
 never interprets criteria (scoring.py owns that). Callers rely on:
 JSON-typed columns are always valid JSON, `connect()` returns rows as
 sqlite3.Row, and upsert_listing() keys on (product_slug, url) so
-re-running a search refreshes price/last_seen instead of duplicating.
+re-running a search refreshes price/last_seen instead of duplicating —
+first_seen and hidden_at survive that refresh, so "new since" and
+hide-from-deals state persist across scrapes. query_listings() omits
+hidden rows unless asked for them.
 """
 
 import json
@@ -58,6 +61,7 @@ CREATE TABLE IF NOT EXISTS listings (
   unit_price REAL,
   first_seen TEXT NOT NULL,
   last_seen TEXT NOT NULL,
+  hidden_at TEXT,
   UNIQUE(product_slug, url)
 );
 CREATE TABLE IF NOT EXISTS settings (
@@ -125,6 +129,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE listings ADD COLUMN unit_qty REAL")
         conn.execute("ALTER TABLE listings ADD COLUMN unit TEXT")
         conn.execute("ALTER TABLE listings ADD COLUMN unit_price REAL")
+    if "hidden_at" not in cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN hidden_at TEXT")
     conn.commit()
 
 
@@ -286,6 +292,36 @@ def set_listing_units(conn: sqlite3.Connection, listing_id: int, units: dict) ->
     )
 
 
+def set_listing_hidden(conn: sqlite3.Connection, listing_id: int, hidden: bool) -> bool:
+    """Hide a listing from deals (or unhide it). Returns False for an
+    unknown id. Hiding is idempotent: re-hiding keeps the original stamp."""
+    if hidden:
+        sql = "UPDATE listings SET hidden_at=COALESCE(hidden_at, ?) WHERE id=?"
+        cur = conn.execute(sql, (_now(), listing_id))
+    else:
+        cur = conn.execute("UPDATE listings SET hidden_at=NULL WHERE id=?", (listing_id,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def hidden_listings(conn: sqlite3.Connection, product_slug: str | None = None) -> list[dict]:
+    """Every hidden listing (optionally one product's), most recently hidden first."""
+    sql = "SELECT * FROM listings WHERE hidden_at IS NOT NULL"
+    args: list = []
+    if product_slug:
+        sql += " AND product_slug=?"
+        args.append(product_slug)
+    sql += " ORDER BY hidden_at DESC, id DESC"
+    return [_row_to_listing(r) for r in conn.execute(sql, args).fetchall()]
+
+
+def _row_to_listing(row: sqlite3.Row) -> dict:
+    d = dict(row)
+    d["attrs"] = json.loads(d["attrs"])
+    d["hard_fails"] = json.loads(d["hard_fails"])
+    return d
+
+
 def listings_for_units(conn: sqlite3.Connection) -> list[dict]:
     """(id, title, price) for every listing — the unit-price backfill set."""
     return [dict(r) for r in conn.execute("SELECT id, title, price FROM listings")]
@@ -309,11 +345,20 @@ def query_listings(
     include_hard_fails: bool = False,
     limit: int = 50,
     max_distance_mi: float | None = None,
+    include_hidden: bool = False,
+    first_seen_since: str | None = None,
 ) -> list[dict]:
     """max_distance_mi drops rows with unknown distance: a listing with no
-    location can't claim to be nearby (they still show when no cap is set)."""
+    location can't claim to be nearby (they still show when no cap is set).
+    Hidden rows are omitted unless include_hidden; first_seen_since (ISO
+    timestamp) keeps only listings first seen at or after it."""
     sql = "SELECT * FROM listings WHERE product_slug=?"
     args: list = [product_slug]
+    if not include_hidden:
+        sql += " AND hidden_at IS NULL"
+    if first_seen_since:
+        sql += " AND first_seen >= ?"
+        args.append(first_seen_since)
     if min_score is not None:
         sql += " AND score >= ?"
         args.append(min_score)
@@ -330,13 +375,7 @@ def query_listings(
         sql += " AND hard_fails = '[]'"
     sql += " ORDER BY score DESC NULLS LAST, price ASC NULLS LAST LIMIT ?"
     args.append(limit)
-    out = []
-    for row in conn.execute(sql, args).fetchall():
-        d = dict(row)
-        d["attrs"] = json.loads(d["attrs"])
-        d["hard_fails"] = json.loads(d["hard_fails"])
-        out.append(d)
-    return out
+    return [_row_to_listing(r) for r in conn.execute(sql, args).fetchall()]
 
 
 def record_search_run(conn: sqlite3.Connection, product_slug: str, site_results: dict) -> int:

@@ -175,10 +175,17 @@ Example, over MCP: `run_backtest("thin-client-laptop")`, later
 
 ## Dashboard UI
 
-An Astro (SSR) dashboard in `ui/` reads the same SQLite db read-only:
+An Astro (SSR) dashboard in `ui/` reads the same SQLite db (its one
+write is the Hide button, which stamps `listings.hidden_at`):
 
 - **Deals** (`/`) — filterable best-deals table with KPI tiles and the
-  product's verify-by-hand checklist.
+  product's verify-by-hand checklist. A **First seen** column and a
+  `new` badge (first seen in the last 2 days) surface fresh listings;
+  "New within N days" keeps only those. **Hide** drops a listing from
+  deals for good (it keeps refreshing on scrapes, so it never returns
+  as new); `hide_listing` / `unhide_listing` do the same over MCP.
+- **Hidden** (`/hidden`) — every hidden listing, newest first, with an
+  Unhide button.
 - **History** (`/history`) — observed prices over time; filled dots are
   real sold prices, rings are asking prices.
 - **Backtests** (`/backtests`) — every stored backtest, visualized:

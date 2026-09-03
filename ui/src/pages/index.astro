@@ -1,7 +1,10 @@
 ---
 /** Deals dashboard: one filter row scoping the KPI tiles, the deals
- * table, and the manual-checks card below it. */
+ * table, and the manual-checks card below it. Listings first seen in
+ * the last NEW_DAYS days are marked "new"; `?new=N` keeps only listings
+ * first seen within N days. Each row can be hidden (see /hidden). */
 import EmptyState from "../components/EmptyState.astro";
+import HideButton from "../components/HideButton.astro";
 import SiteMultiSelect from "../components/SiteMultiSelect.astro";
 import StatTile from "../components/StatTile.astro";
 import Layout from "../layouts/Layout.astro";
@@ -18,13 +21,19 @@ const maxPrice = url.searchParams.get("max_price");
 const selectedSites = (url.searchParams.get("sites") ?? "").split(",").filter(Boolean);
 const includeHardFails = url.searchParams.get("hard_fails") === "1";
 const within = url.searchParams.get("within");
+const newWithin = url.searchParams.get("new");
 const homeHint = db.homeHint();
+/** How recent "new" is on the badge and the tile. */
+const NEW_DAYS = 2;
+const newSince = db.sinceIso(NEW_DAYS);
+const isNew = (r: db.Listing) => r.first_seen >= newSince;
 const filters: db.DealFilters = {
   minScore: minScore ? Number(minScore) : undefined,
   maxPrice: maxPrice ? Number(maxPrice) : undefined,
   sites: selectedSites.length ? selectedSites : undefined,
   includeHardFails,
   maxDistance: within ? Number(within) : undefined,
+  newWithinDays: newWithin ? Number(newWithin) : undefined,
 };
 const rows = product ? db.deals(productSlug, filters) : [];
 const sites = product ? db.listingSites(productSlug) : [];
@@ -33,6 +42,8 @@ const priced = rows.filter((r) => r.price != null && r.price > 0);
 const best = priced.length ? Math.min(...priced.map((r) => r.price!)) : null;
 const median = priced[0]?.median_price ?? null;
 const nSites = new Set(rows.map((r) => r.site_slug)).size;
+const nNew = rows.filter(isNew).length;
+const back = url.pathname + url.search;
 ---
 <Layout title="Deals" active="deals" product={productSlug}>
   {!db.hasDb() && <EmptyState what="database" tool="seed_defaults" />}
@@ -53,6 +64,9 @@ const nSites = new Set(rows.map((r) => r.site_slug)).size;
       Within{homeHint && <span class="hint"> of {homeHint}</span>}
       <input type="number" name="within" min="1" step="any" inputmode="numeric" value={within ?? ""} placeholder="any mi" disabled={!homeHint} />
     </label>
+    <label title="Only listings first seen within this many days">New within
+      <input type="number" name="new" min="0.5" step="any" inputmode="numeric" value={newWithin ?? ""} placeholder="any days" />
+    </label>
     <label class="chk"><input type="checkbox" name="hard_fails" value="1" checked={includeHardFails} /> include hard fails</label>
     <button type="submit">Apply</button>
   </form>
@@ -64,13 +78,14 @@ const nSites = new Set(rows.map((r) => r.site_slug)).size;
         <StatTile label="Best price" value={money(best)} />
         <StatTile label="Median price" value={money(median)} />
         <StatTile label="Sites reporting" value={String(nSites)} hint={`${sites.length} with any listing`} />
+        <StatTile label={`New in ${NEW_DAYS}d`} value={String(nNew)} hint="first seen recently" />
       </div>
 
       {rows.length === 0 ? (
         <EmptyState what={`listings for ${product.name}`} tool={`run_search("${productSlug}")`} />
       ) : (
         <div class="card">
-          <h2>Best deals <span class="sub">— sorted by score, then price; click $/unit to sort by price per ounce</span></h2>
+          <h2>Best deals <span class="sub">— sorted by score, then price; click $/unit to sort by price per ounce, First seen for newest; Hide removes a row for good (undo on the Hidden page)</span></h2>
           <div class="wrap-x">
             <table class="data" data-sortable>
               <thead>
@@ -79,13 +94,15 @@ const nSites = new Set(rows.map((r) => r.site_slug)).size;
                   <th class="num" title="Price per ounce (weight or fluid), or per count when the pack size has no weight; from the listing title">$/unit</th>
                   <th class="num">vs median</th>
                   <th class="num" aria-sort="descending">Score</th><th class="num" title={homeHint ? `Miles from ${homeHint}` : "Miles from home"}>≈ mi</th>
-                  <th>Condition</th><th class="num">Seller</th><th>Last seen</th>
+                  <th>Condition</th><th class="num">Seller</th>
+                  <th title="First scrape that found this listing">First seen</th><th>Last seen</th><th></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr>
                     <td><a href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a>
+                      {isNew(r) && <span class="badge badge-new" title={`First seen ${r.first_seen.slice(0, 16).replace("T", " ")} UTC`}>new</span>}
                       {r.hard_fails.length > 0 && <div class="status status-critical"><span class="ic">✗</span>{r.hard_fails.join("; ")}</div>}
                     </td>
                     <td><span class="swatch" style={`background:${siteVar(r.site_slug, knownSites)}`}></span>{r.site_slug}</td>
@@ -96,7 +113,9 @@ const nSites = new Set(rows.map((r) => r.site_slug)).size;
                     <td class="num">{r.distance_mi == null ? "—" : r.distance_mi.toFixed(0)}</td>
                     <td>{r.condition ?? "—"}</td>
                     <td class="num">{r.seller_rating != null ? `${r.seller_rating}%` : "—"}{r.seller_feedback_count != null ? ` (${r.seller_feedback_count.toLocaleString()})` : ""}</td>
+                    <td>{day(r.first_seen)}</td>
                     <td>{day(r.last_seen)}</td>
+                    <td><HideButton id={r.id} hidden={false} back={back} /></td>
                   </tr>
                 ))}
               </tbody>

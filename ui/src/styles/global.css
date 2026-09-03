@@ -191,3 +191,13 @@ table.data[data-sortable] thead th:focus-visible { outline: 2px solid var(--acce
 .msel-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; }
 .msel-opt { display: flex; gap: 8px; align-items: center; padding: 3px 6px; color: var(--text-primary); font-size: 13px; border-radius: 4px; }
 .msel-opt:hover { background: color-mix(in oklab, var(--surface-1) 92%, var(--text-primary)); }
+
+/* Row actions and the "new listing" marker */
+.btn-ghost {
+  background: transparent; color: var(--text-secondary); border: 1px solid var(--baseline);
+  border-radius: 6px; padding: 2px 8px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.btn-ghost:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.btn-ghost:disabled { opacity: 0.5; cursor: wait; }
+.hide-form { display: inline; margin: 0; }
+.badge-new { border-color: var(--accent); color: var(--accent); margin-left: 6px; vertical-align: 1px; }

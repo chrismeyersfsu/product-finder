@@ -1,0 +1,39 @@
+---
+/** Hide / unhide a listing. A real form post to /api/hide (works with
+ * JavaScript off: the server redirects back to `back`); with JS the
+ * submit is intercepted, posted with fetch, and the enclosing table
+ * row is removed in place so the page keeps its scroll and filters. */
+interface Props { id: number; hidden: boolean; back: string }
+const { id, hidden, back } = Astro.props;
+---
+<form class="hide-form" method="post" action="/api/hide">
+  <input type="hidden" name="id" value={id} />
+  <input type="hidden" name="hidden" value={hidden ? "0" : "1"} />
+  <input type="hidden" name="back" value={back} />
+  <button type="submit" class="btn-ghost" title={hidden ? "Show this listing in deals again" : "Hide this listing from deals (Hidden page to undo)"}>
+    {hidden ? "Unhide" : "Hide"}
+  </button>
+</form>
+<script>
+  document.addEventListener("submit", async (e) => {
+    const form = e.target as HTMLFormElement | null;
+    if (!form?.classList.contains("hide-form")) return;
+    e.preventDefault();
+    const btn = form.querySelector("button");
+    if (btn) btn.disabled = true;
+    try {
+      const res = await fetch(form.action, {
+        method: "POST",
+        body: new FormData(form),
+        headers: { accept: "application/json" },
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const row = form.closest("tr");
+      if (row) row.remove();
+      else location.reload();
+    } catch {
+      if (btn) btn.disabled = false;
+      form.submit(); // fall back to the full-page path
+    }
+  });
+</script>

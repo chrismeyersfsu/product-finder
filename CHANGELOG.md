@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.15.0 — 2026-09-03
+
+- Deals page: a sortable **First seen** column, a `new` badge on
+  listings first seen in the last 2 days, a "New in 2d" tile, and a
+  "New within N days" filter (`?new=N`). `query_listings` and
+  `best_deals` take `new_within_days` over MCP.
+- Hide listings. Each deals row has a **Hide** button; hidden
+  listings stay out of deals and best_deals but keep refreshing on
+  scrapes (so they never come back as "new"). The new **Hidden** page
+  (`/hidden`) lists them, newest first, with Unhide. Over MCP:
+  `hide_listing(id)`, `unhide_listing(id)`, `hidden_listings()`.
+  Schema: `listings.hidden_at` (migrated on connect). The UI's only
+  write goes through `ui/src/lib/hide.ts` and the `/api/hide` route,
+  which refuses cross-site posts (Origin must match Host; Astro's own
+  check is off because it rebuilt the origin as `http://localhost`).
+
 ## 0.14.0 — 2026-09-02
 
 - Three dealer used-car sites, attached to the car products:
