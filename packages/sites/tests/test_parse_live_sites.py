@@ -80,6 +80,7 @@ def test_goodwill_api_json():
     assert out[0]["price"] == 54.0
     assert out[0]["url"] == "https://shopgoodwill.com/item/275108890"
     assert out[1]["price"] == 129.99  # buyNowPrice fallback when currentPrice 0
+    assert out[0]["image_url"] is None  # live-rederived capture carries no image field
 
 
 def test_bonanza_css_split_price_spans():
@@ -89,3 +90,9 @@ def test_bonanza_css_split_price_spans():
     assert out[0]["price"] == 15.83  # $ / whole / . / cents are separate spans
     assert out[2]["price"] == 4.95
     assert out[0]["url"].startswith("https://www.bonanza.com/listings/Love-Beauty")
+    # spec.py's explicit "image" selector skips the top-seller badge icon
+    # (also an <img>, earlier in the card) and picks the real photo
+    assert out[0]["image_url"] == (
+        "https://images-bucket.bonanzastatic.com/afu/images/94c2/7149/4366_16176832346"
+        "/s-l1600_thumb200.jpg"
+    )

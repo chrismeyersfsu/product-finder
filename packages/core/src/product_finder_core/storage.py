@@ -8,8 +8,9 @@ JSON-typed columns are always valid JSON, `connect()` returns rows as
 sqlite3.Row, and upsert_listing() keys on (product_slug, url) so
 re-running a search refreshes price/last_seen instead of duplicating —
 first_seen and hidden_at survive that refresh, so "new since" and
-hide-from-deals state persist across scrapes. query_listings() omits
-hidden rows unless asked for them.
+hide-from-deals state persist across scrapes, and a scrape that finds
+no image keeps the image_url an earlier one stored. query_listings()
+omits hidden rows unless asked for them.
 """
 
 import json
@@ -62,6 +63,7 @@ CREATE TABLE IF NOT EXISTS listings (
   first_seen TEXT NOT NULL,
   last_seen TEXT NOT NULL,
   hidden_at TEXT,
+  image_url TEXT,
   UNIQUE(product_slug, url)
 );
 CREATE TABLE IF NOT EXISTS settings (
@@ -131,6 +133,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE listings ADD COLUMN unit_price REAL")
     if "hidden_at" not in cols:
         conn.execute("ALTER TABLE listings ADD COLUMN hidden_at TEXT")
+    if "image_url" not in cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN image_url TEXT")
     conn.commit()
 
 
@@ -255,17 +259,18 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> int:
         "unit_qty": listing.get("unit_qty"),
         "unit": listing.get("unit"),
         "unit_price": listing.get("unit_price"),
+        "image_url": listing.get("image_url"),
         "now": now,
     }
     cur = conn.execute(
         """INSERT INTO listings (product_slug, site_slug, url, title, price, currency,
                                  condition, location, seller_rating, seller_feedback_count,
                                  attrs, score, hard_fails, distance_mi,
-                                 unit_qty, unit, unit_price, first_seen, last_seen)
+                                 unit_qty, unit, unit_price, image_url, first_seen, last_seen)
            VALUES (:product_slug, :site_slug, :url, :title, :price, :currency,
                    :condition, :location, :seller_rating, :seller_feedback_count,
                    :attrs, :score, :hard_fails, :distance_mi,
-                   :unit_qty, :unit, :unit_price, :now, :now)
+                   :unit_qty, :unit, :unit_price, :image_url, :now, :now)
            ON CONFLICT(product_slug, url) DO UPDATE SET
              title=excluded.title, price=excluded.price, condition=excluded.condition,
              location=excluded.location, seller_rating=excluded.seller_rating,
@@ -273,6 +278,7 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> int:
              attrs=excluded.attrs, score=excluded.score, hard_fails=excluded.hard_fails,
              distance_mi=excluded.distance_mi, unit_qty=excluded.unit_qty,
              unit=excluded.unit, unit_price=excluded.unit_price,
+             image_url=COALESCE(excluded.image_url, listings.image_url),
              last_seen=excluded.last_seen""",
         row,
     )

@@ -6,6 +6,24 @@
       "brand": "Kroger",
       "items": [
         {"itemId": "0001111060903", "size": "12 ct", "price": {"regular": 3.49, "promo": 2.99}}
+      ],
+      "images": [
+        {
+          "perspective": "front",
+          "featured": true,
+          "sizes": [
+            {"size": "thumbnail", "url": "https://www.kroger.com/product/images/thumbnail/front/0001111060903"},
+            {"size": "medium", "url": "https://www.kroger.com/product/images/medium/front/0001111060903"},
+            {"size": "large", "url": "https://www.kroger.com/product/images/large/front/0001111060903"}
+          ]
+        },
+        {
+          "perspective": "back",
+          "featured": false,
+          "sizes": [
+            {"size": "medium", "url": "https://www.kroger.com/product/images/medium/back/0001111060903"}
+          ]
+        }
       ]
     },
     {

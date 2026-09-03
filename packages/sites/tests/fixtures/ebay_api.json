@@ -2,9 +2,11 @@
   {"title": "Lenovo ThinkPad X1 Carbon Gen 6 i5-8350U 16GB RAM 256GB NVMe FHD IPS",
    "price": {"value": "289.99", "currency": "USD"},
    "itemWebUrl": "https://www.ebay.com/itm/123",
-   "seller": {"username": "techdeals_usa", "feedbackPercentage": "99.1", "feedbackScore": 2394}},
+   "seller": {"username": "techdeals_usa", "feedbackPercentage": "99.1", "feedbackScore": 2394},
+   "image": {"imageUrl": "https://i.ebayimg.com/images/g/8KIAAOSwsalcdef/s-l500.jpg"}},
   {"title": "ThinkPad X1 Carbon Gen 7 i7-8665U 16GB 512GB SSD",
    "price": {"value": "1349.00", "currency": "USD"},
-   "itemWebUrl": "https://www.ebay.com/itm/456"},
+   "itemWebUrl": "https://www.ebay.com/itm/456",
+   "thumbnailImages": [{"imageUrl": "https://i.ebayimg.com/images/g/th456ghi/s-l225.jpg"}]},
   {"title": "no url item"}
 ]}

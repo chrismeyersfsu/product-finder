@@ -12,6 +12,17 @@ never-raises: the facebook_marketplace parser raises LoginWall when
 Facebook serves a login page instead of results, so run.py can report
 "login wall" rather than "no items parsed".
 
+Every returned dict also carries "image_url": an absolute URL for the
+listing's thumbnail/primary photo, or None when the markup/JSON has
+none — the key is always present, never omitted. css/browser_css
+configs may carry an "image" selector (relative to the item; "&" means
+the item itself) and "image_attr"; absent an "image" selector, the
+first `img` inside the item is used, and absent "image_attr" the
+attribute chosen is the first of src/data-src/data-lazy-src/
+data-original/first-srcset-url that isn't empty, a `data:` URI, or an
+obvious 1x1/spacer/placeholder image — real cards often lazy-load the
+real photo into a data-* attribute behind a tiny placeholder in `src`.
+
 css/browser_css configs may carry static `location` and `condition`
 strings (grocery sites: a fixed store address and "new") — copied onto
 every row verbatim, unlike the per-card `seller`/`date` selectors.
@@ -46,6 +57,17 @@ _SELLER_RE = re.compile(r"\(([\d,]+)\)\s*([\d.]+)%")
 _SOLD_RE = re.compile(r"sold\s+(\w{3})\.?\s+(\d{1,2}),\s+(\d{4})", re.IGNORECASE)
 # "Durham, NC" — a short place-name span on a Facebook Marketplace card
 _LOCATION_RE = re.compile(r"^[\w .'\u2019-]+,\s*[A-Z]{2}$")
+# Filename/id fragments that mark a decorative or placeholder image
+# rather than a real product photo (badge icons aren't caught by this --
+# those need an explicit "image" selector instead).
+_PLACEHOLDER_IMAGE_RE = re.compile(
+    r"(?:^|[/_.-])(?:1x1|blank|spacer|placeholder|transparent|no[_-]?image)(?:[/_.-]|$)",
+    re.IGNORECASE,
+)
+# Attributes tried in order when a css config has no explicit image_attr --
+# real markup lazy-loads the true photo into one of the data-* attributes
+# behind a tiny placeholder in src.
+_IMAGE_SRC_ATTRS = ("src", "data-src", "data-lazy-src", "data-original")
 
 
 class LoginWall(Exception):
@@ -65,6 +87,48 @@ def _price(text: str | None) -> float | None:
 def _sel(item, selector: str):
     """Resolve a config selector against a card node; "&" is the node itself."""
     return item if selector == "&" else item.select_one(selector)
+
+
+def _first_srcset_url(srcset) -> str | None:
+    """Srcset "url1 1x, url2 2x" -> "url1" (the first candidate, descriptor dropped)."""
+    if not srcset:
+        return None
+    first = str(srcset).strip().split(",")[0].strip()
+    return first.split()[0] if first else None
+
+
+def _clean_image_value(value) -> str | None:
+    """None out empty strings, base64 `data:` placeholders, and filenames
+    that look like a 1x1/spacer/placeholder gif rather than a real photo."""
+    text = str(value).strip() if value else ""
+    if not text or text.startswith("data:"):
+        return None
+    if _PLACEHOLDER_IMAGE_RE.search(text):
+        return None
+    return text
+
+
+def _image_from_node(node, image_attr: str | None) -> str | None:
+    """Pull a real photo URL off an <img> node, lazy-load aware."""
+    if node is None:
+        return None
+    if image_attr:
+        value = node.get(image_attr)
+        if image_attr == "srcset":
+            value = _first_srcset_url(value)
+        return _clean_image_value(value)
+    for attr in _IMAGE_SRC_ATTRS:
+        cleaned = _clean_image_value(node.get(attr))
+        if cleaned:
+            return cleaned
+    return _clean_image_value(_first_srcset_url(node.get("srcset")))
+
+
+def _css_image_url(item, config: dict, page_url: str) -> str | None:
+    selector = config.get("image")
+    node = _sel(item, selector) if selector else item.find("img")
+    value = _image_from_node(node, config.get("image_attr"))
+    return urljoin(page_url, value) if value else None
 
 
 def _sold_date(text: str | None) -> str | None:
@@ -131,9 +195,27 @@ def _parse_css(config: dict, page_url: str, body: str) -> list[dict]:
                 "sold_at": sold_at,
                 "location": config.get("location"),
                 "condition": config.get("condition"),
+                "image_url": _css_image_url(item, config, page_url),
             }
         )
     return out
+
+
+def _reddit_image_url(data: dict) -> str | None:
+    """preview.images[0].source.url (HTML-unescaped) beats `thumbnail`,
+    which reddit sets to "self"/"default"/"nsfw" sentinels rather than a
+    real URL for text posts / posts with no preview yet."""
+    preview = data.get("preview") or {}
+    images = preview.get("images") or []
+    if images:
+        source = (images[0] or {}).get("source") or {}
+        url = source.get("url")
+        if url:
+            return str(url).replace("&amp;", "&")
+    thumbnail = data.get("thumbnail")
+    if isinstance(thumbnail, str) and thumbnail.startswith(("http://", "https://")):
+        return thumbnail
+    return None
 
 
 def _parse_reddit_json(page_url: str, body: str) -> list[dict]:
@@ -156,6 +238,7 @@ def _parse_reddit_json(page_url: str, body: str) -> list[dict]:
                 "url": urljoin("https://www.reddit.com", permalink),
                 "seller_rating": None,
                 "seller_feedback_count": None,
+                "image_url": _reddit_image_url(data),
             }
         )
     return out
@@ -180,6 +263,10 @@ def _parse_ebay_api(body: str) -> list[dict]:
         price = item.get("price", {}).get("value")
         seller = item.get("seller", {})
         rating = seller.get("feedbackPercentage")
+        image_url = (item.get("image") or {}).get("imageUrl")
+        if not image_url:
+            thumbs = item.get("thumbnailImages") or []
+            image_url = (thumbs[0] or {}).get("imageUrl") if thumbs else None
         out.append(
             {
                 "title": title,
@@ -187,6 +274,7 @@ def _parse_ebay_api(body: str) -> list[dict]:
                 "url": url,
                 "seller_rating": float(rating) if rating else None,
                 "seller_feedback_count": seller.get("feedbackScore"),
+                "image_url": image_url,
             }
         )
     return out
@@ -200,6 +288,7 @@ def _parse_bestbuy_api(body: str) -> list[dict]:
             "url": p.get("url"),
             "seller_rating": None,
             "seller_feedback_count": None,
+            "image_url": p.get("image") or p.get("thumbnailImage"),
         }
         for p in _json_items(body, "products")
         if p.get("name") and p.get("url")
@@ -219,6 +308,10 @@ def _parse_walmart_api(page_url: str, body: str) -> list[dict]:
                 "url": urljoin("https://www.walmart.com", url),
                 "seller_rating": None,
                 "seller_feedback_count": None,
+                # No walmart_api fixture exists to confirm the real field
+                # name against; "image"/"thumbnailImage" mirror the shape
+                # used by the other product-search APIs above.
+                "image_url": item.get("image") or item.get("thumbnailImage"),
             }
         )
     return out
@@ -254,6 +347,7 @@ def _parse_facebook(page_url: str, body: str) -> list[dict]:
         if not title:
             continue
         seen.add(url)
+        image_url = _image_from_node(anchor.find("img"), None)
         out.append(
             {
                 "title": title,
@@ -262,6 +356,7 @@ def _parse_facebook(page_url: str, body: str) -> list[dict]:
                 "location": location,
                 "seller_rating": None,
                 "seller_feedback_count": None,
+                "image_url": urljoin(page_url, image_url) if image_url else None,
             }
         )
     return out
@@ -283,9 +378,44 @@ def _parse_goodwill_api(body: str) -> list[dict]:
                 "url": f"https://shopgoodwill.com/item/{item_id}",
                 "seller_rating": None,
                 "seller_feedback_count": None,
+                # goodwill_api.json is a live-rederived capture that
+                # carries no image field on any row; "imageURL" is the
+                # field name shopgoodwill's buyer API is documented to
+                # use elsewhere, kept here for the day a fixture shows it.
+                "image_url": item.get("imageURL"),
             }
         )
     return out
+
+
+def _kroger_image_url(item: dict) -> str | None:
+    """Kroger Products API `images`: a list of {perspective, sizes: [{size,
+    url}, ...]} entries. Prefer the "front" perspective's medium/large
+    size (the ones actually big enough to be useful); fall back to
+    whatever the first available image/size offers."""
+
+    def _size_url(entry: dict) -> str | None:
+        sizes = entry.get("sizes") or []
+        for wanted in ("medium", "large"):
+            for s in sizes:
+                if s.get("size") == wanted and s.get("url"):
+                    return s["url"]
+        for s in sizes:
+            if s.get("url"):
+                return s["url"]
+        return None
+
+    images = item.get("images") or []
+    front = next((im for im in images if im.get("perspective") == "front"), None)
+    if front:
+        url = _size_url(front)
+        if url:
+            return url
+    for im in images:
+        url = _size_url(im)
+        if url:
+            return url
+    return None
 
 
 def _parse_kroger_api(config: dict, body: str) -> list[dict]:
@@ -319,6 +449,7 @@ def _parse_kroger_api(config: dict, body: str) -> list[dict]:
                 "condition": config.get("condition", "new"),
                 "seller_rating": None,
                 "seller_feedback_count": None,
+                "image_url": _kroger_image_url(item),
             }
         )
     return out
@@ -341,6 +472,9 @@ def _parse_autolist_api(config: dict, body: str) -> list[dict]:
         condition = str(r.get("condition") or "used")
         if r.get("dealer_name"):
             condition = f"{condition}; {r['dealer_name']}"
+        # Live /search records carry "primary_photo_url" (a CarGurus CDN
+        # jpeg) plus a "photo_urls" list; the primary is the card thumbnail.
+        photo = r.get("primary_photo_url")
         out.append(
             {
                 "title": title,
@@ -350,6 +484,7 @@ def _parse_autolist_api(config: dict, body: str) -> list[dict]:
                 "condition": condition,
                 "seller_rating": None,
                 "seller_feedback_count": None,
+                "image_url": urljoin(site_url, photo) if photo else None,
             }
         )
     return out
@@ -388,6 +523,12 @@ def _parse_carscom(page_url: str, body: str) -> list[dict]:
         condition = stock.lower() or "used"
         if seller.get("dealerName"):
             condition = f"{condition}; {seller['dealerName']}"
+        # Real cards.com markup renders the photo as an <img> in the
+        # card-gallery (lazy-loaded, so data-src over src); this trimmed
+        # fixture has that gallery stripped, so fall back to the same
+        # "primaryThumbnail" URL the JSON already carries for the <img>.
+        image_node = card.find("img")
+        image_url = _image_from_node(image_node, None) or d.get("primaryThumbnail")
         out.append(
             {
                 "title": title,
@@ -397,6 +538,7 @@ def _parse_carscom(page_url: str, body: str) -> list[dict]:
                 "condition": condition,
                 "seller_rating": None,
                 "seller_feedback_count": None,
+                "image_url": urljoin(page_url, image_url) if image_url else None,
             }
         )
     return out
@@ -424,6 +566,15 @@ def _parse_carvana(page_url: str, body: str) -> list[dict]:
         if miles:
             title = f"{title}, {int(miles)} mi"
         price = offer.get("price")
+        # schema.org Vehicle.image may be a single URL string or a list of
+        # them (multiple photos) — take the first string either way.
+        raw_image = d.get("image")
+        if isinstance(raw_image, list):
+            image_url = next((v for v in raw_image if isinstance(v, str) and v), None)
+        elif isinstance(raw_image, str) and raw_image:
+            image_url = raw_image
+        else:
+            image_url = None
         out.append(
             {
                 "title": title,
@@ -433,6 +584,7 @@ def _parse_carvana(page_url: str, body: str) -> list[dict]:
                 "condition": f"{cond.lower()}; Carvana (delivery)",
                 "seller_rating": None,
                 "seller_feedback_count": None,
+                "image_url": image_url,
             }
         )
     return out

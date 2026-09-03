@@ -37,6 +37,7 @@ export interface Listing {
   first_seen: string;
   last_seen: string;
   hidden_at: string | null;
+  image_url: string | null;
   median_price?: number;
   pct_vs_median?: number;
 }

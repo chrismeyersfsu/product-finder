@@ -1,5 +1,6 @@
 {"products": [
   {"name": "Lenovo ThinkPad X1 Carbon Gen 6 14\" FHD IPS 16GB",
-   "salePrice": 599.99, "url": "https://www.bestbuy.com/site/lenovo-x1/6353713.p"},
+   "salePrice": 599.99, "url": "https://www.bestbuy.com/site/lenovo-x1/6353713.p",
+   "image": "https://pisces.bbystatic.com/image2/BestBuy_US/images/products/6353713/6353713_sd.jpg"},
   {"name": "nameless no-url filler"}
 ]}

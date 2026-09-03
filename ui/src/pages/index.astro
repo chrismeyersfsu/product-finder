@@ -101,9 +101,15 @@ const back = url.pathname + url.search;
               <tbody>
                 {rows.map((r) => (
                   <tr>
-                    <td class="c-title"><a href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a>
-                      {isNew(r) && <span class="badge badge-new" title={`First seen ${r.first_seen.slice(0, 16).replace("T", " ")} UTC`}>new</span>}
-                      {r.hard_fails.length > 0 && <div class="status status-critical"><span class="ic">✗</span>{r.hard_fails.join("; ")}</div>}
+                    <td class="c-title">
+                      <div class="titled">
+                        {r.image_url && <img class="thumb" src={r.image_url} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" />}
+                        <div>
+                          <a href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a>
+                          {isNew(r) && <span class="badge badge-new" title={`First seen ${r.first_seen.slice(0, 16).replace("T", " ")} UTC`}>new</span>}
+                          {r.hard_fails.length > 0 && <div class="status status-critical"><span class="ic">✗</span>{r.hard_fails.join("; ")}</div>}
+                        </div>
+                      </div>
                     </td>
                     <td data-label="Site"><span class="swatch" style={`background:${siteVar(r.site_slug, knownSites)}`}></span>{r.site_slug}</td>
                     <td class="num" data-label="Price">{moneyCents(r.price)}</td>

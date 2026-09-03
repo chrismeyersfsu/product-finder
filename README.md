@@ -179,7 +179,8 @@ An Astro (SSR) dashboard in `ui/` reads the same SQLite db (its one
 write is the Hide button, which stamps `listings.hidden_at`):
 
 - **Deals** (`/`) — filterable best-deals table with KPI tiles and the
-  product's verify-by-hand checklist. A **First seen** column and a
+  product's verify-by-hand checklist, each listing with its photo. A
+  **First seen** column and a
   `new` badge (first seen in the last 2 days) surface fresh listings;
   "New within N days" keeps only those. **Hide** drops a listing from
   deals for good (it keeps refreshing on scrapes, so it never returns

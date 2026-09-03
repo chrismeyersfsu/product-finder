@@ -44,6 +44,7 @@ def test_harris_teeter_css():
     )
     assert out[0]["location"] == "Harris Teeter, 2107 Hillsborough Rd, Durham, NC 27705"
     assert out[0]["condition"] == "new"
+    assert out[0]["image_url"] is None  # guessed synthetic markup carries no <img>
 
 
 def test_food_lion_css():
@@ -53,6 +54,7 @@ def test_food_lion_css():
     assert out[0]["price"] == 2.89
     assert out[0]["location"] == "Food Lion, 3808 Guess Rd, Durham, NC 27705"
     assert out[0]["condition"] == "new"
+    assert out[0]["image_url"] is None  # guessed synthetic markup carries no <img>
 
 
 def test_food_lion_datadome_wall_is_not_mistaken_for_zero_results():
@@ -79,7 +81,12 @@ def test_kroger_api_json():
     )
     assert out[0]["location"] == "Harris Teeter, 2107 Hillsborough Rd, Durham, NC 27705"
     assert out[0]["condition"] == "new"
+    # "front" perspective's medium size, not the "back" perspective
+    assert out[0]["image_url"] == (
+        "https://www.kroger.com/product/images/medium/front/0001111060903"
+    )
     assert out[1]["price"] == 5.99
+    assert out[1]["image_url"] is None  # this row carries no `images` field
     # description omits the pack size; the item's `size` is folded in
     assert out[2]["title"] == "Premier Protein Vanilla Protein Shake, 12 ct / 11 fl oz"
     assert out[3]["price"] is None  # out-of-stock row: no `items` entries
@@ -100,3 +107,9 @@ def test_aldi_browser_css():
         "21349273-elevation-ready-to-drink-vanilla-protein-shake-4-ct"
     )
     assert out[0]["location"].startswith("Aldi, ") and out[0]["condition"] == "new"
+    # default "first img in the item" picks up the real product photo src
+    assert out[0]["image_url"] == (
+        "https://www.instacart.com/image-server/197x197/filters:fill(FFFFFF,true):format(jpg)"
+        "/d2lnr5mha7bycj.cloudfront.net/product-image/file/"
+        "large_cb49d28c-946c-408c-9e06-cd3596e331be.jpg"
+    )

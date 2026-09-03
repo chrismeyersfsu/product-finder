@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.16.0 — 2026-09-03
+
+- Listing photos. Every parser now returns `image_url` (the card's
+  thumbnail or primary photo; css/browser_css configs may set an
+  `image` selector and `image_attr`, defaulting to the item's first
+  `img` with lazy-load `data-src`/`srcset` fallbacks); stored on the
+  listing, and a later scrape without an image keeps the earlier one.
+  The Deals and Hidden pages show the photo beside the title (56px on
+  desktop, 72px in the phone cards), hotlinked from the site; one that
+  fails to load disappears rather than leaving a broken icon. Existing
+  rows fill in on their next hourly scrape.
+
 ## 0.15.1 — 2026-09-03
 
 - Phone layout. Under 720px the Deals and Hidden tables stop scrolling

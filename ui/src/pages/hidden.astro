@@ -48,7 +48,12 @@ const back = url.pathname + url.search;
           <tbody>
             {rows.map((r) => (
               <tr>
-                <td class="c-title"><a href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a></td>
+                <td class="c-title">
+                  <div class="titled">
+                    {r.image_url && <img class="thumb" src={r.image_url} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" />}
+                    <a href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a>
+                  </div>
+                </td>
                 <td data-label="Product"><a href={`/?product=${encodeURIComponent(r.product_slug)}`}>{r.product_name}</a></td>
                 <td data-label="Site"><span class="swatch" style={`background:${siteVar(r.site_slug, knownSites)}`}></span>{r.site_slug}</td>
                 <td class="num" data-label="Price">{moneyCents(r.price)}</td>

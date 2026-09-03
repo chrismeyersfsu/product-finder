@@ -27,6 +27,7 @@ def test_parse_ebay_fixture():
     assert first["price"] == 289.99
     assert first["seller_rating"] == 99.1
     assert first["seller_feedback_count"] == 2394
+    assert first["image_url"] is None  # ebay.html carries no <img> markup
     # relative href resolved against the page url
     assert listings[1]["url"] == "https://www.ebay.com/itm/456"
     assert listings[1]["price"] == 1349.00
@@ -39,6 +40,11 @@ def test_parse_reddit_fixture():
     assert len(listings) == 2  # post without permalink skipped
     assert listings[0]["url"].startswith("https://www.reddit.com/r/hardwareswap/")
     assert listings[0]["price"] == 300.0  # pulled from selftext
+    # preview.images[0].source.url wins over `thumbnail`, &amp; unescaped
+    assert listings[0]["image_url"] == (
+        "https://preview.redd.it/abc123thinkpad.jpg?width=640&format=pjpg&auto=webp&s=deadbeef1234"
+    )
+    assert listings[1]["image_url"] is None  # thumbnail: "self" is a sentinel, not a URL
 
 
 def test_parse_garbage_html_returns_empty():
@@ -65,6 +71,9 @@ def test_parse_ebay_api_fixture():
     assert listings[0]["seller_rating"] == 99.1
     assert listings[0]["seller_feedback_count"] == 2394
     assert listings[1]["seller_rating"] is None
+    assert listings[0]["image_url"] == "https://i.ebayimg.com/images/g/8KIAAOSwsalcdef/s-l500.jpg"
+    # no `image`, falls back to thumbnailImages[0].imageUrl
+    assert listings[1]["image_url"] == "https://i.ebayimg.com/images/g/th456ghi/s-l225.jpg"
 
 
 def test_parse_bestbuy_api_fixture():
@@ -72,6 +81,9 @@ def test_parse_bestbuy_api_fixture():
     listings = parse.parse_listings({"kind": "bestbuy_api", "config": {}}, "https://x", body)
     assert len(listings) == 1
     assert listings[0]["price"] == 599.99
+    assert listings[0]["image_url"] == (
+        "https://pisces.bbystatic.com/image2/BestBuy_US/images/products/6353713/6353713_sd.jpg"
+    )
 
 
 def test_parse_browser_css_uses_css_selectors():
@@ -96,7 +108,11 @@ def test_parse_facebook_marketplace():
     assert first["price"] == 450.0
     assert first["location"] == "Durham, NC"
     assert first["url"] == "https://www.facebook.com/marketplace/item/1112223334445556/"
+    assert (
+        first["image_url"] == "https://scontent.xx.fbcdn.net/v/t45.5328-4/thinkpad_x1_carbon_g6.jpg"
+    )
     assert items[1]["price"] == 1200.0
+    assert items[1]["image_url"] is None  # card has no <img>
     assert items[2]["price"] is None  # no-price card still parses
 
 
@@ -106,3 +122,53 @@ def test_facebook_login_wall_raises():
         parse.parse_listings(
             {"kind": "facebook_marketplace", "config": {}}, "https://www.facebook.com/", body
         )
+
+
+_IMAGE_CARD_CSS = {"item": "div.card", "title": "h3", "price": ".price", "link": "a"}
+
+
+def test_parse_css_lazy_load_image_fallback():
+    # Card 1: src is a base64 data: placeholder, the real photo is
+    # lazy-loaded into data-src — the default attr chain must skip the
+    # placeholder and pick up data-src instead.
+    # Card 2: src is an obvious spacer gif with no lazy-load attr at all —
+    # image_url should come back None rather than the spacer.
+    body = """
+    <div class="card">
+      <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7"
+           data-src="https://cdn.example.com/real-photo.jpg">
+      <h3>Widget</h3>
+      <span class="price">$9.99</span>
+      <a href="/widget">Widget</a>
+    </div>
+    <div class="card">
+      <img src="https://cdn.example.com/img/spacer.gif">
+      <h3>Gadget</h3>
+      <span class="price">$4.99</span>
+      <a href="/gadget">Gadget</a>
+    </div>
+    """
+    listings = parse.parse_listings(
+        {"kind": "css", "config": _IMAGE_CARD_CSS}, "https://example.com", body
+    )
+    assert len(listings) == 2
+    assert listings[0]["image_url"] == "https://cdn.example.com/real-photo.jpg"
+    assert listings[1]["image_url"] is None
+
+
+def test_parse_css_image_selector_override():
+    # Without an explicit "image" selector, the default "first img in the
+    # item" would grab the decorative badge icon instead of the real photo.
+    config = {**_IMAGE_CARD_CSS, "image": "img.product-photo", "image_attr": "data-original"}
+    body = """
+    <div class="card">
+      <img class="badge-icon" src="https://cdn.example.com/badge.png">
+      <img class="product-photo" src="https://cdn.example.com/placeholder.png"
+           data-original="https://cdn.example.com/product-real.jpg">
+      <h3>Widget</h3>
+      <span class="price">$9.99</span>
+      <a href="/widget">Widget</a>
+    </div>
+    """
+    listings = parse.parse_listings({"kind": "css", "config": config}, "https://example.com", body)
+    assert listings[0]["image_url"] == "https://cdn.example.com/product-real.jpg"

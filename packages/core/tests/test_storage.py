@@ -162,3 +162,14 @@ def test_query_first_seen_since(tmp_path):
     rows = storage.query_listings(conn, "w", first_seen_since="2021-01-01T00:00:00+00:00")
     assert [r["url"] for r in rows] == ["http://x/5"]
     assert len(storage.query_listings(conn, "w")) == 2
+
+
+def test_image_url_is_stored_and_kept_when_a_rescrape_has_none(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_product(conn, {"slug": "w"})
+    li = {"product_slug": "w", "site_slug": "ebay", "url": "http://x/6"}
+    storage.upsert_listing(conn, {**li, "image_url": "http://img/1.jpg"})
+    storage.upsert_listing(conn, li)
+    assert storage.query_listings(conn, "w")[0]["image_url"] == "http://img/1.jpg"
+    storage.upsert_listing(conn, {**li, "image_url": "http://img/2.jpg"})
+    assert storage.query_listings(conn, "w")[0]["image_url"] == "http://img/2.jpg"

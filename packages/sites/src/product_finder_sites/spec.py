@@ -9,7 +9,9 @@ keyed by env vars — see api.py), then plain-HTML "css", then
 JS-heavy sites. A flat kind ("css", "reddit_json") is a
 single-strategy site. css/browser_css config: a search `url` with a
 {query} placeholder plus CSS selectors (item/title/price/link,
-optional link_attr and seller). Never fetches, parses, or stores;
+optional link_attr, seller, and image/image_attr for the card's
+thumbnail — see parse.py's _parse_css for the image/image_attr default
+and lazy-load fallback rules). Never fetches, parses, or stores;
 callers copy these into the sites table and may override any config
 there.
 
@@ -281,6 +283,10 @@ _FLAT_SITES = [
         "div.item_title a",
         "a.item_price",
         "div.item_title a",
+        # A "top seller" badge icon (also an <img>) sits before the real
+        # photo in some cards, so the default "first img" pick would grab
+        # the badge instead — point straight at the item photo link's img.
+        image="a.item_image_container img",
     ),
     # Woot removed site search; scrape the computers category feed and
     # keyword-filter locally. Card anchors mix price into the title text.

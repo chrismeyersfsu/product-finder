@@ -1,8 +1,13 @@
 {"kind": "Listing", "data": {"children": [
   {"kind": "t3", "data": {"title": "[USA-CA] [H] ThinkPad X1 Carbon Gen 6 16GB [W] PayPal",
     "selftext": "Asking $300 shipped. Great battery.",
-    "permalink": "/r/hardwareswap/comments/abc123/usaca_h_thinkpad/"}},
+    "permalink": "/r/hardwareswap/comments/abc123/usaca_h_thinkpad/",
+    "thumbnail": "https://b.thumbs.redditmedia.com/AbCdEfGhIjKlMnOp1234.jpg",
+    "preview": {"images": [{"source": {
+      "url": "https://preview.redd.it/abc123thinkpad.jpg?width=640&amp;format=pjpg&amp;auto=webp&amp;s=deadbeef1234"
+    }}]}}},
   {"kind": "t3", "data": {"title": "[USA-NY] [W] cheap laptop [H] PayPal",
-    "selftext": "", "permalink": "/r/hardwareswap/comments/def456/wanted/"}},
+    "selftext": "", "permalink": "/r/hardwareswap/comments/def456/wanted/",
+    "thumbnail": "self"}},
   {"kind": "t3", "data": {"title": "no permalink post", "selftext": ""}}
 ]}}

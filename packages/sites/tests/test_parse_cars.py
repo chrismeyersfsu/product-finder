@@ -23,6 +23,8 @@ def test_autolist_rows_become_car_listings():
     assert first["url"] == "https://www.autolist.com/listings/KNDADFS58R6034010"
     assert first["location"] == "Raleigh, NC"
     assert first["condition"] == "used; Westgate Chrysler Jeep Dodge Ram"
+    assert first["image_url"].startswith("https://static.cargurus.com/images/forsale/")
+    assert out[1]["image_url"] is None  # record without a photo
     assert out[3]["price"] is None  # accepting offers
 
 
@@ -72,6 +74,12 @@ def test_carscom_cards_from_vehicle_details_json():
     )
     assert first["location"] == "Greensboro, NC"
     assert first["condition"] == "used; Toyota of Greensboro"
+    # card-gallery's <img> is stripped in this trimmed capture, so the
+    # fallback to the JSON's own primaryThumbnail field kicks in
+    assert first["image_url"] == (
+        "https://platform.cstatic-images.com/in/v2/ee7f0e08-146e-53c9-b7f9-4da843b83faa/"
+        "8d0a9db9-c290-4498-8d6c-de68298daf13/Whk7I6eGjOpeQch5qhQH7MNA5L8.jpg"
+    )
     assert out[1]["location"] == "Sanford, NC"
 
 
@@ -105,6 +113,10 @@ def test_carvana_vehicle_jsonld_and_slug_url(monkeypatch):
     assert out[0]["url"] == "https://www.carvana.com/vehicle/4590522"
     assert out[0]["location"] is None
     assert out[0]["condition"] == "used; Carvana (delivery)"
+    assert out[0]["image_url"] == (
+        "https://cdnblob.fastly.carvana.io/2005099880/post-large/normalized/zoomcrop/"
+        "2005099880-edc-02.jpg?v=2026.9.2_23.1.26"
+    )
 
     seen = {}
 
