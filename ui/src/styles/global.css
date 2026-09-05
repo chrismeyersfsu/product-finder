@@ -374,3 +374,18 @@ form.product details.advanced .field:last-of-type { margin-bottom: 0; }
   display: inline-block; margin-left: 6px; font-size: 11px; padding: 1px 6px; border-radius: 10px;
   background: color-mix(in oklab, var(--accent) 15%, var(--surface-1)); color: var(--accent);
 }
+
+/* Monitor page: hourly-run progress bar, the pulsing "in progress"
+   marker, and the highlighted row for ?product=<slug>. */
+.progress {
+  height: 8px; border-radius: 4px; margin: 10px 0 14px;
+  background: var(--grid); overflow: hidden;
+}
+.progress-bar { height: 100%; border-radius: 4px; background: var(--accent); transition: width 0.3s ease; }
+.progress-bar.died { background: var(--status-critical); }
+.ic.pulse { color: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+tr.highlight td { background: color-mix(in oklab, var(--accent) 10%, var(--surface-1)); }
+.callout {
+  border-left: 3px solid var(--accent); padding: 6px 0 6px 12px; margin: 0 0 14px; font-size: 13px;
+}

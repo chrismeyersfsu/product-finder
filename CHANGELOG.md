@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.21.0 — 2026-09-04
+
+- Monitor page (`/monitor`): the hourly sync's live progress (bar plus
+  a per-product done/running/pending table, with a `?product=<slug>`
+  callout estimating how far out that product's turn is) and the
+  on-demand queue as one ordered list (running, then queued, then
+  recently finished). Auto-refreshes only while something's active.
+- Both scrape paths now write their live progress to
+  `data/scrape-now/state/hourly.json` / `requested.json` (atomically,
+  after every product) so the Monitor page has something to read; a
+  run that crashes mid-product is later shown as "died".
+
 ## 0.20.1 — 2026-09-04
 
 - Deals page: the product picker sits alone on top, full width, and

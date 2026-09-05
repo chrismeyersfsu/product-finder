@@ -6,6 +6,7 @@ pipeline) and PF_DB points at a tmp_path db so server.add_product /
 storage.get_product see real product rows.
 """
 
+import json
 import os
 import time
 from pathlib import Path
@@ -288,3 +289,124 @@ def test_a_crashing_request_is_recorded_and_the_queue_keeps_draining(tmp_path, m
     assert runs["fine"]["stored"] == 1
     assert (base / "done" / "boom").read_text() == "boom: RuntimeError: browser died\n"
     assert not list((base / "queue").iterdir()) and not list((base / "running").iterdir())
+
+
+# -- state files ---------------------------------------------------------------
+
+
+def test_hourly_state_has_current_set_mid_run(tmp_db, monkeypatch):
+    server.add_product("alpha", "Alpha")
+    server.add_product("beta", "Beta")
+    state_path = tmp_db / "scrape-now" / "state" / "hourly.json"
+
+    seen = {}
+
+    def fake_run_search(slug):
+        data = json.loads(state_path.read_text())
+        if slug == "beta":
+            seen["current"] = data["current"]
+            seen["products"] = data["products"]
+            seen["current_started_at"] = data["current_started_at"]
+        return {"stored": 1, "per_site": {"site": 1}, "errors": {}}
+
+    monkeypatch.setattr(server, "rescore_product", lambda slug: {"rescored": 0, "rejected": 0})
+    monkeypatch.setattr(server, "run_search", fake_run_search)
+
+    scrape.main([])
+
+    assert seen["current"] == "beta"
+    assert seen["products"] == ["alpha", "beta"]
+    assert seen["current_started_at"] is not None
+
+
+def test_hourly_state_results_and_finish_set_at_the_end(tmp_db, monkeypatch):
+    server.add_product("alpha", "Alpha")
+    server.add_product("beta", "Beta")
+    state_path = tmp_db / "scrape-now" / "state" / "hourly.json"
+
+    monkeypatch.setattr(server, "rescore_product", lambda slug: {"rescored": 0, "rejected": 0})
+    monkeypatch.setattr(
+        server, "run_search", lambda slug: {"stored": 1, "per_site": {"site": 1}, "errors": {}}
+    )
+
+    scrape.main([])
+
+    final = json.loads(state_path.read_text())
+    assert final["mode"] == "hourly"
+    assert final["current"] is None
+    assert final["current_started_at"] is None
+    assert final["finished_at"] is not None
+    assert final["exit"] == 0
+    assert final["results"]["alpha"]["stored"] == 1
+    assert final["results"]["alpha"]["errors"] == 0
+    assert (
+        final["results"]["alpha"]["line"]
+        == "alpha: rescored 0 (dropped 0); stored 1 (site:1); 0 site errors"
+    )
+    assert final["results"]["beta"]["finished_at"] is not None
+
+
+def test_hourly_state_exit_1_on_total_failure(tmp_db, monkeypatch):
+    server.add_product("alpha", "Alpha")
+    monkeypatch.setattr(server, "rescore_product", lambda slug: {"rescored": 0, "rejected": 0})
+    monkeypatch.setattr(
+        server, "run_search", lambda slug: {"stored": 0, "per_site": {}, "errors": {"ebay": "403"}}
+    )
+
+    with pytest.raises(SystemExit):
+        scrape.main([])
+
+    state_path = tmp_db / "scrape-now" / "state" / "hourly.json"
+    final = json.loads(state_path.read_text())
+    assert final["exit"] == 1
+    assert final["finished_at"] is not None
+
+
+def test_requested_state_products_list_grows_as_requests_drain(tmp_db, monkeypatch):
+    server.add_product("alpha", "Alpha")
+    server.add_product("beta", "Beta")
+    base = tmp_db / "scrape-now"
+    _touch(base / "queue" / "alpha")
+    state_path = base / "state" / "requested.json"
+
+    def fake_run_search(slug):
+        if slug == "alpha":
+            data = json.loads(state_path.read_text())
+            assert data["products"] == ["alpha"]
+            assert data["current"] == "alpha"
+            _touch(base / "queue" / "beta")
+        return {"stored": 0, "per_site": {}, "errors": {}}
+
+    monkeypatch.setattr(server, "rescore_product", lambda slug: {"rescored": 0, "rejected": 0})
+    monkeypatch.setattr(server, "run_search", fake_run_search)
+
+    process_requests(base)
+
+    final = json.loads(state_path.read_text())
+    assert final["mode"] == "requested"
+    assert final["products"] == ["alpha", "beta"]
+    assert final["finished_at"] is not None
+    assert final["exit"] == 0
+
+
+def test_requested_state_written_even_when_queue_starts_empty(tmp_path):
+    base = tmp_path / "scrape-now"
+    process_requests(base)
+    final = json.loads((base / "state" / "requested.json").read_text())
+    assert final["products"] == []
+    assert final["started_at"] is not None
+    assert final["finished_at"] is not None
+    assert final["exit"] == 0
+
+
+def test_atomic_state_write_leaves_no_temp_files_behind(tmp_db, monkeypatch):
+    server.add_product("alpha", "Alpha")
+    monkeypatch.setattr(server, "rescore_product", lambda slug: {"rescored": 0, "rejected": 0})
+    monkeypatch.setattr(
+        server, "run_search", lambda slug: {"stored": 1, "per_site": {"s": 1}, "errors": {}}
+    )
+
+    scrape.main([])
+
+    state_dir = tmp_db / "scrape-now" / "state"
+    assert {p.name for p in state_dir.iterdir()} == {"hourly.json"}
