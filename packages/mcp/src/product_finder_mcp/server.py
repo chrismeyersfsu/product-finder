@@ -243,6 +243,7 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
         "rejected_non_product": rejected,
         "per_site": counts,
         "strategies": result["strategies"],
+        "seconds": result.get("seconds", {}),
         "errors": result["errors"],
         "browser_wired": BROWSER_WIRED,
     }

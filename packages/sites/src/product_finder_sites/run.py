@@ -11,12 +11,14 @@ which strategy actually ran ("strategy") and every attempt
 (api/css/browser/json) and calls a 200-with-no-items wall a
 "challenge page". An empty page falls through to the next strategy.
 Category-feed configs (local_filter) drop rows not matching the
-query. search_many() dedupes listings by url across queries and keeps
-a site's error only if no query ever succeeded there.
+query. search_many() dedupes listings by url across queries, keeps
+a site's error only if no query ever succeeded there, and reports
+wall-clock "seconds" per site so slow tiers are visible in run history.
 """
 
 import os
 import re
+import time
 import urllib.parse
 
 from . import api, fetch, parse
@@ -125,12 +127,14 @@ def search_site(site: dict, query: str) -> dict:
 
 def search_many(sites: list[dict], queries: list[str]) -> dict:
     """Run every query against every site. Returns {"listings": [...],
-    "errors": {site: msg}, "strategies": {site: kind_that_ran}} with
-    url-deduped listings."""
+    "errors": {site: msg}, "strategies": {site: kind_that_ran},
+    "seconds": {site: wall_clock}} with url-deduped listings."""
     seen: dict[str, dict] = {}
     errors: dict[str, str] = {}
     strategies: dict[str, str] = {}
+    seconds: dict[str, float] = {}
     for site in sites:
+        started = time.monotonic()
         for query in queries:
             result = search_site(site, query)
             if result["error"]:
@@ -141,4 +145,10 @@ def search_many(sites: list[dict], queries: list[str]) -> dict:
             errors.pop(site["slug"], None)
             for li in result["listings"]:
                 seen.setdefault(li["url"], li)
-    return {"listings": list(seen.values()), "errors": errors, "strategies": strategies}
+        seconds[site["slug"]] = round(time.monotonic() - started, 1)
+    return {
+        "listings": list(seen.values()),
+        "errors": errors,
+        "strategies": strategies,
+        "seconds": seconds,
+    }

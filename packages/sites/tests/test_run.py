@@ -115,6 +115,7 @@ def test_search_many_dedupes_and_reports_strategies(monkeypatch):
     assert len(out["listings"]) == 2  # same fixture twice -> deduped by url
     assert out["errors"] == {}
     assert out["strategies"] == {"ebay": "browser_css"}
+    assert set(out["seconds"]) == {"ebay"} and out["seconds"]["ebay"] >= 0
 
 
 def test_facebook_login_wall_error_is_clear(monkeypatch):

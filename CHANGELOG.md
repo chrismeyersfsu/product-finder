@@ -5,6 +5,9 @@
 - Discogs listings show cover art: unauthenticated search rows come
   back with empty `thumb`/`cover_image`, so the parser now falls back
   to the release's own `thumb` / primary image.
+- Search runs record wall-clock seconds per site (`site_results.seconds`),
+  so slow browser tiers show up in run history instead of only in the
+  product's total.
 
 ## 0.22.0 — 2026-09-04
 
