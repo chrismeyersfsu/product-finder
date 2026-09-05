@@ -30,3 +30,18 @@ def test_unknown_product_line_and_no_attempts():
     text, fail = summarize({"ghost": {"error": "no product: ghost"}})
     assert not fail
     assert "ghost: no product: ghost" in text
+
+
+def test_rescore_counts_lead_the_product_line():
+    text, fail = summarize(
+        {
+            "laptop": {
+                "stored": 5,
+                "per_site": {"newegg": 5},
+                "errors": {},
+                "rescored": {"rescored": 40, "rejected": 2, "valued": 0},
+            }
+        }
+    )
+    assert not fail
+    assert "laptop: rescored 40 (dropped 2); stored 5 (newegg:5); 0 site errors" in text

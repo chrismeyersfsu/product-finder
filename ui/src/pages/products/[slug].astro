@@ -1,0 +1,73 @@
+---
+/** Edit (or delete) one product. Slug is fixed to the URL and never
+ * taken from the form. Handles its own POST: same-origin check, then
+ * either the delete form (_action=delete, guarded by a confirm() on
+ * the client and a matching hidden `confirm` field on the server) or
+ * the main form (parse + validate, re-render with errors on failure,
+ * save + redirect to the list on success). Unknown slug -> 404. */
+export const prerender = false;
+import ProductForm from "../../components/ProductForm.astro";
+import Layout from "../../layouts/Layout.astro";
+import * as db from "../../lib/db";
+import { day } from "../../lib/format";
+import { deleteProduct, formDefaults, parseProductForm, saveProduct } from "../../lib/products";
+import { sameOrigin } from "../../lib/request";
+
+const slug = Astro.params.slug ?? "";
+const product = db.productFull(slug);
+if (!product) return new Response("no such product", { status: 404 });
+
+const siteRows = db.listSites();
+const knownSites = siteRows.map((s) => s.slug);
+let values = formDefaults(product);
+let errors: string[] = [];
+
+if (Astro.request.method === "POST") {
+  if (!sameOrigin(Astro.request)) return new Response("Cross-site POST refused", { status: 403 });
+  const form = await Astro.request.formData();
+
+  if (form.get("_action") === "delete") {
+    if (String(form.get("confirm") ?? "") !== slug) return new Response("confirmation mismatch", { status: 400 });
+    deleteProduct(slug);
+    return Astro.redirect(`/products?deleted=${encodeURIComponent(slug)}`, 303);
+  }
+
+  const parsed = parseProductForm(form, { slugLocked: slug, knownSites });
+  errors = parsed.errors;
+  if (errors.length === 0) {
+    saveProduct(parsed.product);
+    return Astro.redirect(`/products?saved=${encodeURIComponent(slug)}`, 303);
+  }
+  values = formDefaults(parsed.product);
+}
+
+const summary = db.productSummaries().find((s) => s.slug === slug);
+---
+<Layout title={`Edit ${product.name}`} active="products">
+  <div class="card">
+    <h2>
+      Edit product <span class="sub">— {slug}, created {day(product.created_at)}, updated {day(product.updated_at)}</span>
+    </h2>
+    {summary && (
+      <p class="hint">
+        {summary.listingCount} listings, {summary.qualifyingCount} qualifying, {summary.flaggedCount > 0 ? `⚠ ${summary.flaggedCount} flagged` : "0 flagged"}.
+        {" "}<a href={`/?product=${encodeURIComponent(slug)}`}>Deals →</a>
+      </p>
+    )}
+    <ProductForm action={`/products/${encodeURIComponent(slug)}`} values={values} errors={errors} siteRows={siteRows} slugLocked />
+  </div>
+  <div class="card">
+    <h2>Delete this product</h2>
+    <p class="hint">Removes the product and every stored listing for it (price history is kept). This can't be undone.</p>
+    <form
+      class="delete-form"
+      method="post"
+      action={`/products/${encodeURIComponent(slug)}`}
+      onsubmit={`return confirm(${JSON.stringify(`Delete "${product.name}" (${slug}) and all its listings? This cannot be undone.`)})`}
+    >
+      <input type="hidden" name="_action" value="delete" />
+      <input type="hidden" name="confirm" value={slug} />
+      <button type="submit" class="btn-danger">Delete product</button>
+    </form>
+  </div>
+</Layout>

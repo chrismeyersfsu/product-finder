@@ -1,0 +1,39 @@
+---
+/** Create a product. Handles its own POST: same-origin check, parse +
+ * validate, on error re-render the form with every error and the
+ * submitted values (no JS needed), on success save and redirect to
+ * the list with a confirmation. */
+export const prerender = false;
+import ProductForm from "../../components/ProductForm.astro";
+import Layout from "../../layouts/Layout.astro";
+import * as db from "../../lib/db";
+import { formDefaults, parseProductForm, saveProduct } from "../../lib/products";
+import { sameOrigin } from "../../lib/request";
+
+const siteRows = db.listSites();
+const knownSites = siteRows.map((s) => s.slug);
+
+let values = formDefaults();
+let errors: string[] = [];
+
+if (Astro.request.method === "POST") {
+  if (!sameOrigin(Astro.request)) return new Response("Cross-site POST refused", { status: 403 });
+  const form = await Astro.request.formData();
+  const parsed = parseProductForm(form, { knownSites });
+  errors = parsed.errors;
+  if (errors.length === 0 && db.productFull(parsed.product.slug)) {
+    errors = [`a product with slug "${parsed.product.slug}" already exists`];
+  }
+  if (errors.length === 0) {
+    saveProduct(parsed.product);
+    return Astro.redirect(`/products?saved=${encodeURIComponent(parsed.product.slug)}`, 303);
+  }
+  values = formDefaults(parsed.product);
+}
+---
+<Layout title="New product" active="products">
+  <div class="card">
+    <h2>New product</h2>
+    <ProductForm action="/products/new" values={values} errors={errors} siteRows={siteRows} />
+  </div>
+</Layout>

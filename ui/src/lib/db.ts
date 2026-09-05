@@ -1,8 +1,9 @@
 /**
  * Read-only data access for the UI. Owns every SELECT in the UI and
  * nothing else: opens the product-finder SQLite db readonly, never
- * writes (src/lib/hide.ts owns the UI's one write), never creates it,
- * and renders "no db yet" as empty results rather than throwing.
+ * writes (src/lib/hide.ts and src/lib/products.ts own the UI's
+ * writes), never creates it, and renders "no db yet" as empty results
+ * rather than throwing.
  * Server-side only — never import from client scripts. Schema is owned
  * by packages/core (storage.py); this module only reads it. Deals never
  * include hidden listings (hidden_at set).
@@ -17,6 +18,32 @@ export interface Product {
   description: string;
   manual_checks: string[];
   max_price: number | null;
+}
+/** Every column of a `products` row, JSON fields parsed. */
+export interface ProductFull {
+  slug: string;
+  name: string;
+  description: string;
+  queries: string[];
+  criteria: Record<string, unknown>[];
+  extractors: Record<string, unknown>;
+  manual_checks: string[];
+  sites: string[];
+  max_price: number | null;
+  created_at: string;
+  updated_at: string;
+}
+/** One row of the products list: name/slug, query and site scope, and
+ * roll-ups over its listings. */
+export interface ProductSummary {
+  slug: string;
+  name: string;
+  queryCount: number;
+  sites: string[];
+  listingCount: number;
+  qualifyingCount: number;
+  flaggedCount: number;
+  lastSeen: string | null;
 }
 export interface Listing {
   id: number;
@@ -143,6 +170,53 @@ export function listProducts(): Product[] {
       .all()
       .map((r: any) => ({ ...r, manual_checks: JSON.parse(r.manual_checks) }))
   );
+}
+
+/** One product, every column, or null when the slug is unknown. */
+export function productFull(slug: string): ProductFull | null {
+  return withDb(null as ProductFull | null, (db) => {
+    const r: any = db.prepare("SELECT * FROM products WHERE slug = ?").get(slug);
+    if (!r) return null;
+    return {
+      ...r,
+      queries: JSON.parse(r.queries),
+      criteria: JSON.parse(r.criteria),
+      extractors: JSON.parse(r.extractors),
+      manual_checks: JSON.parse(r.manual_checks),
+      sites: JSON.parse(r.sites),
+    };
+  });
+}
+
+/** One row per product for the products list: query/site scope plus
+ * roll-ups over its listings (qualifying = passes every hard fail and
+ * isn't hidden; flagged = carries at least one flag note). */
+export function productSummaries(): ProductSummary[] {
+  return withDb([] as ProductSummary[], (db) => {
+    return db
+      .prepare(
+        `SELECT p.slug, p.name, p.queries, p.sites,
+                COUNT(l.id) AS listing_count,
+                SUM(CASE WHEN l.hard_fails = '[]' AND l.hidden_at IS NULL THEN 1 ELSE 0 END) AS qualifying_count,
+                SUM(CASE WHEN l.flags != '[]' THEN 1 ELSE 0 END) AS flagged_count,
+                MAX(l.last_seen) AS last_seen
+         FROM products p
+         LEFT JOIN listings l ON l.product_slug = p.slug
+         GROUP BY p.slug
+         ORDER BY p.slug`
+      )
+      .all()
+      .map((r: any) => ({
+        slug: r.slug,
+        name: r.name,
+        queryCount: JSON.parse(r.queries).length,
+        sites: JSON.parse(r.sites),
+        listingCount: r.listing_count,
+        qualifyingCount: r.qualifying_count ?? 0,
+        flaggedCount: r.flagged_count ?? 0,
+        lastSeen: r.last_seen,
+      }));
+  });
 }
 
 export function deals(productSlug: string, f: DealFilters = {}): Listing[] {

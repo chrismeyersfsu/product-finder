@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.19.0 — 2026-09-04
+
+- Products page (`/products`): list every product with its listing
+  counts, and create, edit or delete products from a form — the same
+  data `add_product` writes over MCP.
+- The hourly scrape rescores each product's stored listings before
+  searching, so product edits apply within the hour.
+
 ## 0.18.0 — 2026-09-03
 
 - Deals rows now show a warning line for product `flag` criteria —

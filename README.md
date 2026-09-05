@@ -151,7 +151,9 @@ A product is four pieces of data (see the worked example in
 - **manual_checks** — things only a human can verify before buying
 
 After editing a product, `rescore_product(slug)` re-applies its
-extractors and criteria to every stored listing.
+extractors and criteria to every stored listing; the hourly scrape
+does this for every product before searching, so edits made from the
+dashboard's Products pages reach stored listings within the hour.
 
 ## Packages
 
@@ -198,8 +200,9 @@ Example, over MCP: `run_backtest("thin-client-laptop")`, later
 
 ## Dashboard UI
 
-An Astro (SSR) dashboard in `ui/` reads the same SQLite db (its one
-write is the Hide button, which stamps `listings.hidden_at`):
+An Astro (SSR) dashboard in `ui/` reads the same SQLite db (its
+writes are the Hide button, which stamps `listings.hidden_at`, and the
+Products pages, which edit the `products` table):
 
 - **Deals** (`/`) — filterable best-deals table with KPI tiles and the
   product's verify-by-hand checklist, each listing with its photo. Car
@@ -221,6 +224,10 @@ write is the Hide button, which stamps `listings.hidden_at`):
 - **Backtests** (`/backtests`) — every stored backtest, visualized:
   best price by lookback window, savings vs the 3-day baseline with
   95% CIs, and per-site win rates. Caveats are always shown.
+- **Products** (`/products`) — every product with its listing counts;
+  create, edit and delete products in a form (queries and manual
+  checks one per line, criteria and extractors as JSON, sites as
+  checkboxes). Same data the `add_product` MCP tool writes.
 - **Sites** (`/sites`) — which scrapers are actually working, with the
   strategy that ran and the last error.
 

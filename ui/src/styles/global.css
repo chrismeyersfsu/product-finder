@@ -266,4 +266,66 @@ table.data[data-sortable] thead th:focus-visible { outline: 2px solid var(--acce
   table.data.cards td.c-act .btn-ghost { padding: 6px 12px; font-size: 13px; }
   table.data.cards td.c-minor, table.data.cards td.c-empty, table.data.cards td.col-blank { display: none; }
   table.data.cards .status { white-space: normal; }
+
+  form.product .field-row { flex-direction: column; gap: 0; }
 }
+
+/* Buttons that look like the filter-form's submit button but are links */
+a.btn {
+  display: inline-block; background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+  padding: 7px 14px; font: inherit; text-decoration: none;
+}
+a.btn:hover { text-decoration: none; opacity: 0.92; }
+.actions-row { margin: 0 0 16px; }
+
+/* Inline banners: green confirmation, red validation errors */
+.banner {
+  border: 1px solid var(--status-good); border-radius: 8px; padding: 8px 14px; margin: 0 0 16px;
+  font-size: 13px; background: color-mix(in oklab, var(--status-good) 10%, var(--surface-1));
+}
+.errors {
+  border: 1px solid var(--status-critical); border-radius: 8px; padding: 10px 14px; margin: 0 0 16px;
+  background: color-mix(in oklab, var(--status-critical) 8%, var(--surface-1));
+}
+.errors h2 { font-size: 13px; margin: 0 0 6px; color: var(--status-critical); }
+.errors ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.errors li { margin-bottom: 2px; }
+
+/* Product create/edit form */
+form.product { max-width: 760px; }
+form.product .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+form.product .field-row { display: flex; gap: 16px; }
+form.product .field-row .field { flex: 1; }
+form.product label { font-size: 12px; color: var(--text-secondary); }
+form.product label .hint { margin-left: 4px; }
+form.product input[type="text"], form.product input[type="number"], form.product textarea {
+  background: var(--surface-1); color: var(--text-primary); width: 100%;
+  border: 1px solid var(--baseline); border-radius: 6px; padding: 7px 9px; font: inherit;
+}
+form.product input[readonly] { opacity: 0.7; background: color-mix(in oklab, var(--surface-1) 90%, var(--text-primary)); }
+form.product textarea { resize: vertical; }
+form.product textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+form.product .hint { display: block; font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+form.product .hint code { background: color-mix(in oklab, var(--surface-1) 90%, var(--text-primary)); padding: 0 4px; border-radius: 3px; }
+form.product .site-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px 12px;
+  border: 1px solid var(--border); border-radius: 6px; padding: 10px;
+}
+form.product .site-opt { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; color: var(--text-primary); min-width: 0; }
+form.product .site-opt input { margin-top: 3px; flex: none; }
+form.product .site-opt .site-name { min-width: 0; overflow-wrap: anywhere; }
+form.product .site-opt .hint { white-space: normal; }
+form.product .site-opt.disabled { color: var(--text-muted); }
+form.product .actions { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+form.product .actions button[type="submit"] {
+  background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+  padding: 8px 18px; font: inherit; cursor: pointer;
+}
+form.product .note { font-size: 12px; color: var(--text-muted); margin-top: 12px; }
+
+.delete-form { margin: 0; }
+.btn-danger {
+  background: transparent; color: var(--status-critical); border: 1px solid var(--status-critical);
+  border-radius: 6px; padding: 7px 16px; font: inherit; cursor: pointer;
+}
+.btn-danger:hover { background: color-mix(in oklab, var(--status-critical) 10%, transparent); }

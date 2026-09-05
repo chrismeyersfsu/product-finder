@@ -6,19 +6,9 @@
  * the Host header (Astro's own check is off — see astro.config.mjs). */
 import type { APIRoute } from "astro";
 import { setHidden } from "../../lib/hide";
+import { sameOrigin } from "../../lib/request";
 
 export const prerender = false;
-
-function sameOrigin(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  const host = request.headers.get("host");
-  if (!origin || !host) return false;
-  try {
-    return new URL(origin).host === host;
-  } catch {
-    return false;
-  }
-}
 
 export const POST: APIRoute = async ({ request }) => {
   if (!sameOrigin(request)) return new Response("Cross-site POST refused", { status: 403 });
