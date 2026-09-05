@@ -52,6 +52,9 @@
 - The `backtests` and `price_history` tables are dropped automatically
   the next time the database is opened; there is no way back for
   anything stored in them.
+- Discogs (keyless API) as a site: one listing per pressing with
+  copies for sale, priced at the cheapest copy, linking to the Discogs
+  sell page.
 
 ## 0.21.0 — 2026-09-04
 

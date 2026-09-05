@@ -60,7 +60,10 @@ and why the others didn't (`errors`):
    JSON. Missing credentials degrade gracefully: the site records a
    clear "<VAR> unset" error and falls to the next tier.
    `kroger_api` (`KROGER_CLIENT_ID` + `KROGER_CLIENT_SECRET`) serves
-   Harris Teeter. Deployed containers read all of these from
+   Harris Teeter. `discogs_api` is keyless — Discogs' marketplace pages
+   are Cloudflare-walled, but api.discogs.com answers anonymous
+   searches, so `discogs` (vinyl/record listings) needs no credentials
+   at all. Deployed containers read all of these from
    `~/.config/product-finder/secrets.env` (mode 600, created by
    `infra/systemd/install.sh`, never committed).
 2. **Plain HTML** (`css`) — one urllib seam, pure bs4 parsers.
@@ -115,6 +118,21 @@ trimmed) and stores each row's fitted price as `est_value`. `best_deals`
 and the dashboard's results page report `pct_vs_est` / **vs est.** against it. It is
 what that year and mileage is *asking* in your market, not KBB's
 transaction data; it needs at least 10 usable listings.
+
+### Discogs (vinyl/records)
+
+`discogs` is a keyless site: Discogs' own marketplace pages
+(discogs.com/sell) are Cloudflare-walled, but its public database
+JSON API (api.discogs.com) answers anonymous requests fine. One
+`database/search` call (free text plus `config["format"]`, default
+`"vinyl"`) is followed by up to `config["max_releases"]` (default 8)
+per-release lookups, paced to stay under Discogs' ~25 requests/min
+anonymous limit; `config["skip_reissues"]` (default on) spends that
+lookup budget on original pressings before reissues/bootlegs. Each
+pressing with copies currently for sale becomes one listing — title
+"Artist – Album (year, label, country) — N for sale", priced at that
+pressing's cheapest copy — linking to the Discogs page where that
+pressing's copies are actually listed, not its general info page.
 
 ## Container layout
 

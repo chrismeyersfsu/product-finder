@@ -1,0 +1,30 @@
+{
+  "title": "Odelay",
+  "year": 1996,
+  "country": "US",
+  "num_for_sale": 1,
+  "lowest_price": 84.55,
+  "uri": "https://www.discogs.com/release/22884872-Beck-Odelay",
+  "labels": [
+    {
+      "name": "Bong Load Custom Records",
+      "catno": "BL30"
+    }
+  ],
+  "formats": [
+    {
+      "name": "Vinyl",
+      "qty": "1",
+      "descriptions": [
+        "LP",
+        "Album"
+      ]
+    }
+  ],
+  "images": [
+    {
+      "type": "secondary",
+      "uri": "https://i.discogs.com/OKIqzEsSQmSqg1nyfJ2oKScD3peY0vRYPgg8vhlzfbQ/rs:fit/g:sm/q:90/h:581/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTIyODg0/ODcyLTE2NTAxMzM4/ODAtODQ3Ni5qcGVn.jpeg"
+    }
+  ]
+}

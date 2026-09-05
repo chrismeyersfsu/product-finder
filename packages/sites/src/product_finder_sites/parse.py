@@ -29,6 +29,23 @@ every row verbatim, unlike the per-card `seller`/`date` selectors.
 kroger_api rows get the same two fields from strategy config, since a
 Kroger product search is already scoped to one resolved store.
 
+discogs_api rows are one per pressing with copies currently for sale
+(zero-for-sale releases produce no row), title
+"{artist} - {album} ({year}, {label}, {country}) - {N} for sale" (an
+en dash and an em dash in the real rendered title, plain hyphens here
+only to keep this docstring's characters unambiguous) with
+the artist/album split off the search result's "{artist} - {album}"
+title on the first " - " and Discogs' "*"/"(2)"-style disambiguation
+suffixes stripped from the artist; price is the release's lowest_price
+(None when absent or 0 — a free/unset price, not a real $0 listing);
+url is the pressing's Discogs "sell" page (`/sell/release/{id}`, where
+that pressing's copies are actually listed) rather than its info page;
+condition is always "used" (Discogs marketplace copies are all
+secondhand); location is always None (sellers ship from all over); a
+"year" field carries the release year as an int (None if absent/not
+numeric) alongside the usual keys, for a car/game-style extractor that
+wants it structured rather than title-mined.
+
 Dealer used-car rows (autolist_api, carscom, carvana) are titled
 "[Used] YEAR Make Model Trim, <odometer> mi" so the car products'
 year/mileage extractors read them like a Craigslist title; condition
@@ -490,6 +507,70 @@ def _parse_autolist_api(config: dict, body: str) -> list[dict]:
     return out
 
 
+# Discogs disambiguates same-named artists with a trailing "*" (credit
+# text differs slightly from the canonical profile name) or "(N)" (the
+# Nth artist with this exact name) — strip both off the split artist.
+_DISCOGS_ARTIST_DISAMBIG_RE = re.compile(r"\s*\(\d+\)\s*$")
+
+
+def _discogs_clean_artist(name: str) -> str:
+    return _DISCOGS_ARTIST_DISAMBIG_RE.sub("", name.strip()).rstrip("*").strip()
+
+
+def _discogs_label(release: dict, entry: dict) -> str:
+    labels = release.get("labels") or []
+    if labels and labels[0].get("name"):
+        return str(labels[0]["name"])
+    entry_labels = entry.get("label") or []
+    return str(entry_labels[0]) if entry_labels else ""
+
+
+def _parse_discogs_api(body: str) -> list[dict]:
+    """`body` is fetch_discogs_api's own combined JSON, not a raw
+    Discogs response — see api.py's fetch_discogs_api docstring for the
+    {"query", "releases": [{...search fields, "release": {...}}]} shape."""
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        return []
+    out = []
+    for entry in payload.get("releases") or []:
+        release_id = entry.get("id")
+        release = entry.get("release") or {}
+        num_for_sale = release.get("num_for_sale") or 0
+        if not release_id or num_for_sale <= 0:
+            continue
+        raw_title = str(entry.get("title") or "")
+        if " - " in raw_title:
+            artist, _, album = raw_title.partition(" - ")
+            artist = _discogs_clean_artist(artist)
+        else:
+            artist, album = "", raw_title
+        year = release.get("year") or entry.get("year")
+        country = release.get("country") or entry.get("country") or ""
+        label = _discogs_label(release, entry)
+        title = (
+            f"{artist} – {album} ({year or ''}, {label}, {country})"  # noqa: RUF001
+            f" — {num_for_sale} for sale"
+        )
+        lowest_price = release.get("lowest_price")
+        image_url = entry.get("thumb") or entry.get("cover_image") or None
+        out.append(
+            {
+                "title": title,
+                "price": float(lowest_price) if lowest_price else None,
+                "url": f"https://www.discogs.com/sell/release/{release_id}",
+                "location": None,
+                "condition": "used",
+                "seller_rating": None,
+                "seller_feedback_count": None,
+                "image_url": image_url,
+                "year": int(year) if str(year).isdigit() else None,
+            }
+        )
+    return out
+
+
 # "Greensboro, NC (48 mi)" — the dealer line on a cars.com card; the
 # city is a run of capitalized words so the dealer name before it
 # ("Toyota of Greensboro 4.4") is not swallowed.
@@ -612,6 +693,8 @@ def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
         return _parse_kroger_api(strategy["config"], body)
     if kind == "autolist_api":
         return _parse_autolist_api(strategy["config"], body)
+    if kind == "discogs_api":
+        return _parse_discogs_api(body)
     if kind == "carscom":
         return _parse_carscom(page_url, body)
     if kind == "carvana":

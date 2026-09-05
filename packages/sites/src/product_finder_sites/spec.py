@@ -1,4 +1,4 @@
-"""Built-in site registry: 28 marketplaces as pure data.
+"""Built-in site registry: 29 marketplaces as pure data.
 
 Owns the default site specs — nothing else. A site is
 {slug, name, kind, config}. kind "tiered" holds an ordered
@@ -82,6 +82,13 @@ nationwide, so its rows carry no location. Still walled even in a
 headless browser: autotrader, cargurus, carfax, truecar (captcha),
 carmax, edmunds, kbb (Akamai "Access Denied"); hemmings renders but is
 a classic-car site.
+
+discogs (kind "discogs_api", flat) is keyless via api.discogs.com: the
+marketplace HTML at discogs.com/sell is Cloudflare-walled, but the
+database/search + release JSON endpoints answer anonymous requests
+fine. One listing per pressing found, priced at that pressing's
+cheapest copy currently for sale — see api.py's fetch_discogs_api and
+parse.py's _parse_discogs_api for the two-call fetch and row shape.
 """
 
 
@@ -414,6 +421,12 @@ _FLAT_SITES = [
             "url": "https://www.carvana.com/cars/{query_slug}",
             "wait": "script[data-testid=vehicle-ld]",
         },
+    },
+    {
+        "slug": "discogs",
+        "name": "Discogs",
+        "kind": "discogs_api",
+        "config": {"format": "vinyl", "max_releases": 8, "currency": "USD", "skip_reissues": True},
     },
     {
         "slug": "reddit-hardwareswap",
