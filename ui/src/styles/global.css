@@ -1,10 +1,12 @@
-/* UI chrome tokens, instantiated from the dataviz reference palette.
-   Light is the base; dark overrides under both the OS media query and
-   the explicit data-theme toggle scope (toggle wins both ways). */
+/* UI chrome tokens, instantiated from the dataviz reference palette,
+   restyled to read as jQuery Mobile 1.4 ("swatch a" light / a "swatch
+   b"-like dark). Light is the base; dark overrides under both the OS
+   media query and the explicit data-theme toggle scope (toggle wins
+   both ways). */
 :root {
   color-scheme: light;
-  --page: #f9f9f7;
-  --surface-1: #fcfcfb;
+  --page: #f9f9f9;
+  --surface-1: #ffffff;
   --text-primary: #0b0b0b;
   --text-secondary: #52514e;
   --text-muted: #898781;
@@ -20,40 +22,62 @@
   --status-critical: #d03b3b;
   --div-pos: #2a78d6;
   --div-neg: #e34948;
+  /* jQuery-Mobile-specific chrome */
+  --jqm-header-bg: #e9e9e9;
+  --jqm-header-border: #ddd;
+  --jqm-li-border: #ddd;
+  --jqm-btn-bg: #eeeeee;
+  --jqm-btn-border: #ccc;
+  --jqm-count-bg: #e9e9e9;
+  --jqm-overlay: rgba(0, 0, 0, 0.5);
 }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
-    --page: #0d0d0d;
-    --surface-1: #1a1a19;
+    --page: #252525;
+    --surface-1: #333333;
     --text-primary: #ffffff;
     --text-secondary: #c3c2b7;
     --text-muted: #898781;
     --grid: #2c2c2a;
-    --baseline: #383835;
+    --baseline: #464646;
     --border: rgba(255, 255, 255, 0.1);
     --accent: #3987e5;
     --up-good: #0ca30c;
     --status-warning-ink: var(--status-warning);
     --div-pos: #3987e5;
     --div-neg: #e66767;
+    --jqm-header-bg: #3a3a3a;
+    --jqm-header-border: #1f1f1f;
+    --jqm-li-border: #454545;
+    --jqm-btn-bg: #3c3c3c;
+    --jqm-btn-border: #555;
+    --jqm-count-bg: #454545;
+    --jqm-overlay: rgba(0, 0, 0, 0.65);
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #0d0d0d;
-  --surface-1: #1a1a19;
+  --page: #252525;
+  --surface-1: #333333;
   --text-primary: #ffffff;
   --text-secondary: #c3c2b7;
   --text-muted: #898781;
   --grid: #2c2c2a;
-  --baseline: #383835;
+  --baseline: #464646;
   --border: rgba(255, 255, 255, 0.1);
   --accent: #3987e5;
   --up-good: #0ca30c;
   --status-warning-ink: var(--status-warning);
   --div-pos: #3987e5;
   --div-neg: #e66767;
+  --jqm-header-bg: #3a3a3a;
+  --jqm-header-border: #1f1f1f;
+  --jqm-li-border: #454545;
+  --jqm-btn-bg: #3c3c3c;
+  --jqm-btn-border: #555;
+  --jqm-count-bg: #454545;
+  --jqm-overlay: rgba(0, 0, 0, 0.65);
 }
 
 * { box-sizing: border-box; }
@@ -61,70 +85,187 @@ body {
   margin: 0;
   background: var(--page);
   color: var(--text-primary);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-.shell { max-width: 1100px; margin: 0 auto; padding: 0 20px 48px; }
-header.top {
-  display: flex; align-items: baseline; gap: 24px;
-  padding: 18px 0 14px; border-bottom: 1px solid var(--grid); margin-bottom: 20px;
-}
-header.top h1 { font-size: 16px; margin: 0; }
-header.top nav { display: flex; gap: 16px; }
-header.top nav a { color: var(--text-secondary); }
-header.top nav a[aria-current="page"] { color: var(--text-primary); font-weight: 600; }
+.shell { max-width: 1100px; margin: 0 auto; padding: 12px 12px 48px; }
 
-.card {
-  background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: 8px; padding: 16px 18px; margin-bottom: 20px;
+/* ---- jQuery-Mobile-style header bar ---- */
+.jqm-header {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--jqm-header-bg); border-bottom: 1px solid var(--jqm-header-border);
+  padding: 10px 8px; min-height: 44px;
 }
-.card h2 { font-size: 14px; margin: 0 0 10px; }
-.card h2 .sub { color: var(--text-muted); font-weight: 400; }
+.jqm-header h1 {
+  flex: 1; margin: 0; text-align: center; font-size: 16px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px;
+}
+.jqm-header .hdr-left, .jqm-header .hdr-right { flex: 0 0 auto; min-width: 44px; display: flex; }
+.jqm-header .hdr-right { justify-content: flex-end; }
 
-/* Product picker on its own row, the rest of the filters folded behind
-   a Filters toggle (closed unless one of them is active). */
-form.filters { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
-form.filters .product-pick select { width: 100%; max-width: 520px; padding: 7px 8px; font-size: 14px; }
-form.filters .filter-panel summary {
-  display: inline-flex; align-items: center; gap: 8px; width: max-content;
-  padding: 6px 12px; border: 1px solid var(--baseline); border-radius: 6px;
-  background: var(--surface-1); font-size: 13px; cursor: pointer; user-select: none;
+.hdr-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  min-height: 32px; min-width: 32px; padding: 6px 10px;
+  background: var(--jqm-btn-bg); color: var(--text-primary);
+  border: 1px solid var(--jqm-btn-border); border-radius: 0.3125em;
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none;
 }
-form.filters .filter-panel summary::-webkit-details-marker { display: none; }
-form.filters .filter-panel summary::before { content: "\25B8"; font-size: 11px; color: var(--text-muted); }
-form.filters .filter-panel[open] summary::before { content: "\25BE"; }
-form.filters .filter-panel > summary > .badge {
-  background: var(--accent); border-color: var(--accent); color: #fff;
+.hdr-btn:hover { text-decoration: none; opacity: 0.9; }
+a.hdr-btn { color: var(--text-primary); }
+
+/* Hamburger icon: three CSS bars */
+.hamburger .ham-icon, .hamburger .ham-icon::before, .hamburger .ham-icon::after {
+  display: block; width: 16px; height: 2px; background: var(--text-primary); border-radius: 1px;
 }
-form.filters .filter-fields { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 12px 0; }
+.hamburger .ham-icon { position: relative; }
+.hamburger .ham-icon::before, .hamburger .ham-icon::after { content: ""; position: absolute; left: 0; }
+.hamburger .ham-icon::before { top: -5px; }
+.hamburger .ham-icon::after { top: 5px; }
+.hamburger { list-style: none; }
+.hamburger::-webkit-details-marker { display: none; }
+
+/* ---- Off-canvas nav panel (native <details>; works with no JS) ---- */
+.panel-root { position: relative; }
+.panel-root > summary { list-style: none; }
+.panel-root > summary::-webkit-details-marker { display: none; }
+.panel-overlay {
+  position: fixed; inset: 0; z-index: 30; background: var(--jqm-overlay);
+  display: block; cursor: default;
+}
+.panel {
+  position: fixed; top: 0; bottom: 0; left: 0; z-index: 31; width: 78vw; max-width: 300px;
+  background: var(--surface-1); box-shadow: 2px 0 12px rgba(0, 0, 0, 0.3);
+  transform: translateX(-100%); transition: transform 0.18s ease-out;
+  overflow-y: auto; display: flex; flex-direction: column;
+}
+.panel-root[open] .panel { transform: translateX(0); }
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid var(--jqm-li-border);
+  font-weight: 700; background: var(--jqm-header-bg);
+}
+.panel-close {
+  color: var(--text-primary); font-size: 16px; line-height: 1; padding: 4px 6px;
+  border: 1px solid var(--jqm-btn-border); border-radius: 0.3125em; background: var(--jqm-btn-bg);
+}
+.panel .listview { margin: 10px; }
+
+/* ---- jQuery-Mobile-style listview ---- */
+.listview {
+  list-style: none; margin: 14px auto; padding: 0; max-width: 720px;
+  background: var(--surface-1); border: 1px solid var(--jqm-li-border); border-radius: 0.3125em;
+  overflow: hidden;
+}
+.listview li { border-bottom: 1px solid var(--jqm-li-border); }
+.listview li:last-child { border-bottom: 0; }
+/* jQM list-divider: a shaded, non-interactive section header row
+ * inside a listview (e.g. "Pinned" / "All" on the results page). */
+.listview li.list-divider {
+  padding: 0.4em 1em; font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.02em; color: var(--text-secondary); background: var(--jqm-header-bg);
+}
+.listview .ui-li {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  min-height: 44px; padding: 0.7em 1em; color: var(--text-primary);
+  font-size: 16px; font-weight: 700;
+}
+.listview a.ui-li:hover { text-decoration: none; background: color-mix(in oklab, var(--surface-1) 92%, var(--text-primary)); }
+.listview a.ui-li[aria-current="page"] { background: color-mix(in oklab, var(--accent) 12%, var(--surface-1)); }
+.listview .ui-li-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.listview .ui-li-chevron {
+  flex: none; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--jqm-count-bg); color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700;
+}
+.ui-li-count {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.6em; height: 1.6em; padding: 0 0.5em; border-radius: 999px;
+  background: var(--jqm-count-bg); color: var(--text-secondary); font-size: 12px; font-weight: 700;
+}
+
+/* Thumbnail listing rows: image on the left, text to the right */
+.ui-li-has-thumb .ui-li { align-items: flex-start; padding-left: 1em; }
+.ui-li-thumb, .ui-li-thumb-placeholder {
+  flex: none; width: 80px; height: 80px; border-radius: 6px; object-fit: cover;
+  background: var(--grid); border: 1px solid var(--border);
+}
+.ui-li-thumb-placeholder { display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 11px; }
+.ui-li-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-right: 6px; }
+.ui-li-title {
+  font-weight: 700; font-size: 15px; color: var(--text-primary);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ui-li-price-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+.ui-li-price { font-weight: 700; font-size: 16px; }
+.ui-li-vs-good { color: var(--up-good); }
+.ui-li-vs-bad { color: var(--status-critical); }
+.ui-li-meta { font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+.ui-li-aside {
+  margin-left: auto; text-align: right; flex: none; display: flex; flex-direction: column;
+  align-items: flex-end; gap: 6px; font-size: 12px; color: var(--text-secondary);
+}
+
+/* ---- Collapsible (jQM-style, +/- header) ---- */
+.collapsible { margin: 14px 0; border: 1px solid var(--jqm-li-border); border-radius: 0.3125em; background: var(--surface-1); overflow: hidden; }
+.collapsible > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  padding: 0.7em 1em; font-weight: 700; background: var(--jqm-header-bg);
+  border-bottom: 1px solid var(--jqm-li-border); min-height: 44px;
+}
+.collapsible:not([open]) > summary { border-bottom: 0; }
+.collapsible > summary::-webkit-details-marker { display: none; }
+.collapsible > summary::before {
+  content: "+"; flex: none; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--jqm-count-bg); display: flex; align-items: center; justify-content: center; font-size: 14px;
+}
+.collapsible[open] > summary::before { content: "\2212"; }
+.collapsible > summary .badge { margin-left: auto; background: var(--accent); border-color: var(--accent); color: #fff; }
+.collapsible-body { padding: 12px 14px; }
+.collapsible > summary .hint { font-weight: 400; font-size: 12px; }
+
+/* "Fields" collapsible: one checkbox per listing attribute */
+.fields-form { display: flex; flex-direction: column; gap: 12px; }
+.field-toggles {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px 12px;
+}
+.field-toggles .chk { font-size: 13px; color: var(--text-primary); padding-bottom: 0; }
+
+/* Filters form living inside the collapsible */
+form.filters { display: flex; flex-direction: column; gap: 10px; }
+form.filters .filter-fields { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 0 0 12px; }
 form.filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
 form.filters input, form.filters select {
   background: var(--surface-1); color: var(--text-primary);
-  border: 1px solid var(--baseline); border-radius: 6px; padding: 5px 8px; font: inherit;
+  border: 1px solid var(--baseline); border-radius: 0.3125em; padding: 7px 8px; font: inherit; font-size: 14px;
 }
 form.filters .chk { flex-direction: row; align-items: center; gap: 6px; padding-bottom: 7px; }
 form.filters .hint { color: var(--text-muted); }
 form.filters input:disabled { opacity: 0.5; cursor: not-allowed; }
 form.filters button {
-  background: var(--accent); color: #fff; border: 0; border-radius: 6px;
-  padding: 7px 14px; font: inherit; cursor: pointer;
+  background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: 0.3125em;
+  padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; min-height: 44px;
 }
+.sort-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.sort-row label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+.sort-row select { flex: 1; }
 
-/* KPI row of stat tiles */
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
-.tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
-.tile .label { font-size: 12px; color: var(--text-secondary); }
-.tile .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
-.tile .hint { font-size: 12px; color: var(--text-muted); }
+.card {
+  background: var(--surface-1); border: 1px solid var(--jqm-li-border);
+  border-radius: 0.3125em; padding: 14px 16px; margin-bottom: 16px;
+}
+.card h2 { font-size: 14px; margin: 0 0 10px; }
+.card h2 .sub { color: var(--text-muted); font-weight: 400; }
 
+/* One-line summary above a results listview */
 table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.data th {
-  text-align: left; color: var(--text-secondary); font-weight: 500;
-  border-bottom: 1px solid var(--baseline); padding: 6px 8px; white-space: nowrap;
+  text-align: left; color: var(--text-secondary); font-weight: 700; background: var(--jqm-header-bg);
+  border: 1px solid var(--jqm-li-border); padding: 8px; white-space: nowrap;
 }
-table.data td { border-bottom: 1px solid var(--grid); padding: 6px 8px; vertical-align: top; }
+table.data td { border: 1px solid var(--jqm-li-border); padding: 8px; vertical-align: top; }
 table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; }
 table.data tr:hover td { background: color-mix(in oklab, var(--surface-1) 92%, var(--text-primary)); }
 .wrap-x { overflow-x: auto; }
@@ -145,7 +286,7 @@ table.data tr:hover td { background: color-mix(in oklab, var(--surface-1) 92%, v
 .caveats { font-size: 12px; color: var(--text-muted); }
 .caveats li { margin-bottom: 2px; }
 .empty {
-  border: 1px dashed var(--baseline); border-radius: 8px; padding: 24px;
+  border: 1px dashed var(--baseline); border-radius: 0.3125em; padding: 24px;
   color: var(--text-secondary); text-align: center; margin-bottom: 20px;
 }
 .empty code { background: color-mix(in oklab, var(--surface-1) 90%, var(--text-primary)); padding: 1px 5px; border-radius: 4px; }
@@ -163,7 +304,7 @@ details.tableview summary { cursor: pointer; font-size: 12px; color: var(--text-
 svg [data-tip]:hover { opacity: 0.85; }
 
 #tooltip {
-  position: fixed; z-index: 10; pointer-events: none; display: none;
+  position: fixed; z-index: 40; pointer-events: none; display: none;
   background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18); padding: 8px 10px; max-width: 320px; font-size: 12px;
 }
@@ -189,14 +330,14 @@ table.data[data-sortable] thead th:focus-visible { outline: 2px solid var(--acce
 .msel { position: relative; }
 .msel summary {
   list-style: none; cursor: pointer; background: var(--surface-1); color: var(--text-primary);
-  border: 1px solid var(--baseline); border-radius: 6px; padding: 5px 8px; min-width: 120px;
+  border: 1px solid var(--baseline); border-radius: 0.3125em; padding: 7px 8px; min-width: 120px;
 }
 .msel summary::-webkit-details-marker { display: none; }
 .msel summary::after { content: "\25BE"; margin-left: 6px; color: var(--text-muted); }
 .msel summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 .msel-panel {
   position: absolute; top: calc(100% + 4px); left: 0; z-index: 6; min-width: 220px;
-  background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 0.3125em;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18); padding: 8px;
 }
 .msel-clear {
@@ -208,8 +349,7 @@ table.data[data-sortable] thead th:focus-visible { outline: 2px solid var(--acce
 .msel-opt { display: flex; gap: 8px; align-items: center; padding: 3px 6px; color: var(--text-primary); font-size: 13px; border-radius: 4px; }
 .msel-opt:hover { background: color-mix(in oklab, var(--surface-1) 92%, var(--text-primary)); }
 
-/* Listing thumbnail beside its title (hotlinked from the site; a
- * broken or blocked image removes itself) */
+/* Listing thumbnail beside its title, used on plain tables (Hidden) */
 .titled { display: flex; gap: 10px; align-items: flex-start; }
 .thumb {
   flex: 0 0 56px; width: 56px; height: 56px; object-fit: cover; border-radius: 6px;
@@ -218,12 +358,12 @@ table.data[data-sortable] thead th:focus-visible { outline: 2px solid var(--acce
 
 /* Row actions and the "new listing" marker */
 .btn-ghost {
-  background: transparent; color: var(--text-secondary); border: 1px solid var(--baseline);
-  border-radius: 6px; padding: 2px 8px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap;
+  background: var(--jqm-btn-bg); color: var(--text-secondary); border: 1px solid var(--jqm-btn-border);
+  border-radius: 0.3125em; padding: 6px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
 }
 .btn-ghost:hover { color: var(--text-primary); border-color: var(--text-muted); }
 .btn-ghost:disabled { opacity: 0.5; cursor: wait; }
-.hide-form { display: inline; margin: 0; }
+.hide-form, .pin-form { display: inline; margin: 0; }
 .badge-new { border-color: var(--accent); color: var(--accent); margin-left: 6px; vertical-align: 1px; }
 
 /* Narrow screens: no sideways scrolling. Card tables (table.cards)
@@ -234,36 +374,29 @@ table.data[data-sortable] thead th:focus-visible { outline: 2px solid var(--acce
  * .c-minor and .c-empty ("—") cells are dropped on phones. */
 .msort { display: none; }
 @media (max-width: 720px) {
-  .shell { padding: 0 12px 40px; }
-  header.top { flex-wrap: wrap; gap: 6px 16px; padding: 14px 0 10px; }
-  header.top nav { flex-wrap: wrap; gap: 4px 14px; }
-  form.filters .product-pick select { max-width: none; }
-  form.filters .filter-panel summary { width: 100%; box-sizing: border-box; }
+  .shell { padding: 8px 8px 40px; }
+  .jqm-header h1 { font-size: 15px; }
   form.filters .filter-fields { gap: 10px; }
   form.filters .filter-fields > label, form.filters .filter-fields > .msel-wrap { flex: 1 1 calc(50% - 10px); min-width: 0; }
   form.filters label.chk { flex-basis: 100%; }
   form.filters input:not([type="checkbox"]), form.filters select, .msel summary { width: 100%; }
   .msel-opt { padding: 6px; }
-  form.filters button { width: 100%; padding: 9px 14px; }
-  .tiles { grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 14px; }
-  .tile { padding: 8px 10px; }
-  .tile .label { font-size: 11px; line-height: 1.2; }
-  .tile .value { font-size: 18px; }
-  .tile .hint { display: none; }
+  form.filters button { width: 100%; }
   .card { padding: 12px; }
   .card h2 .sub { display: none; }
+  .ui-li-thumb, .ui-li-thumb-placeholder { width: 64px; height: 64px; }
 
   .msort { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); margin: 0 0 8px; }
   .msort select {
     flex: 1; background: var(--surface-1); color: var(--text-primary);
-    border: 1px solid var(--baseline); border-radius: 6px; padding: 6px 8px; font: inherit;
+    border: 1px solid var(--baseline); border-radius: 0.3125em; padding: 6px 8px; font: inherit;
   }
   table.data.cards { font-size: 13px; }
   table.data.cards thead { display: none; }
   table.data.cards, table.data.cards tbody { display: block; }
   table.data.cards tr {
     position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px;
-    padding: 10px 0; border-bottom: 1px solid var(--grid);
+    padding: 10px; border: 0; border-bottom: 1px solid var(--jqm-li-border);
   }
   table.data.cards tr:hover td { background: transparent; }
   table.data.cards td { display: block; border: 0; padding: 0; min-width: 0; overflow-wrap: anywhere; }
@@ -285,19 +418,19 @@ table.data[data-sortable] thead th:focus-visible { outline: 2px solid var(--acce
 
 /* Buttons that look like the filter-form's submit button but are links */
 a.btn {
-  display: inline-block; background: var(--accent); color: #fff; border: 0; border-radius: 6px;
-  padding: 7px 14px; font: inherit; text-decoration: none;
+  display: inline-block; background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: 0.3125em;
+  padding: 8px 14px; font: inherit; font-weight: 600; text-decoration: none;
 }
 a.btn:hover { text-decoration: none; opacity: 0.92; }
 .actions-row { margin: 0 0 16px; }
 
 /* Inline banners: green confirmation, red validation errors */
 .banner {
-  border: 1px solid var(--status-good); border-radius: 8px; padding: 8px 14px; margin: 0 0 16px;
+  border: 1px solid var(--status-good); border-radius: 0.3125em; padding: 8px 14px; margin: 0 0 16px;
   font-size: 13px; background: color-mix(in oklab, var(--status-good) 10%, var(--surface-1));
 }
 .errors {
-  border: 1px solid var(--status-critical); border-radius: 8px; padding: 10px 14px; margin: 0 0 16px;
+  border: 1px solid var(--status-critical); border-radius: 0.3125em; padding: 10px 14px; margin: 0 0 16px;
   background: color-mix(in oklab, var(--status-critical) 8%, var(--surface-1));
 }
 .errors h2 { font-size: 13px; margin: 0 0 6px; color: var(--status-critical); }
@@ -305,7 +438,7 @@ a.btn:hover { text-decoration: none; opacity: 0.92; }
 .errors li { margin-bottom: 2px; }
 
 /* Product create/edit form */
-form.product { max-width: 760px; }
+form.product { max-width: 100%; }
 form.product .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
 form.product .field-row { display: flex; gap: 16px; }
 form.product .field-row .field { flex: 1; }
@@ -313,7 +446,7 @@ form.product label { font-size: 12px; color: var(--text-secondary); }
 form.product label .hint { margin-left: 4px; }
 form.product input[type="text"], form.product input[type="number"], form.product textarea {
   background: var(--surface-1); color: var(--text-primary); width: 100%;
-  border: 1px solid var(--baseline); border-radius: 6px; padding: 7px 9px; font: inherit;
+  border: 1px solid var(--baseline); border-radius: 0.3125em; padding: 8px 9px; font: inherit;
 }
 form.product input[readonly] { opacity: 0.7; background: color-mix(in oklab, var(--surface-1) 90%, var(--text-primary)); }
 form.product textarea { resize: vertical; }
@@ -322,7 +455,7 @@ form.product .hint { display: block; font-size: 12px; color: var(--text-muted); 
 form.product .hint code { background: color-mix(in oklab, var(--surface-1) 90%, var(--text-primary)); padding: 0 4px; border-radius: 3px; }
 form.product .site-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px 12px;
-  border: 1px solid var(--border); border-radius: 6px; padding: 10px;
+  border: 1px solid var(--border); border-radius: 0.3125em; padding: 10px;
 }
 form.product .site-opt { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; color: var(--text-primary); min-width: 0; }
 form.product .site-opt input { margin-top: 3px; flex: none; }
@@ -331,8 +464,8 @@ form.product .site-opt .hint { white-space: normal; }
 form.product .site-opt.disabled { color: var(--text-muted); }
 form.product .actions { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 form.product .actions button[type="submit"] {
-  background: var(--accent); color: #fff; border: 0; border-radius: 6px;
-  padding: 8px 18px; font: inherit; cursor: pointer;
+  background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: 0.3125em;
+  padding: 9px 18px; font: inherit; font-weight: 600; cursor: pointer; min-height: 44px;
 }
 form.product .note { font-size: 12px; color: var(--text-muted); margin-top: 12px; }
 
@@ -355,17 +488,17 @@ form.product details.advanced .field:last-of-type { margin-bottom: 0; }
 .delete-form { margin: 0; }
 .btn-danger {
   background: transparent; color: var(--status-critical); border: 1px solid var(--status-critical);
-  border-radius: 6px; padding: 7px 16px; font: inherit; cursor: pointer;
+  border-radius: 0.3125em; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; min-height: 44px;
 }
 .btn-danger:hover { background: color-mix(in oklab, var(--status-critical) 10%, transparent); }
 
 /* Scrape-now button + status line on the product edit page */
-.scrape-block { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; }
+.scrape-block { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; flex-wrap: wrap; }
 .scrape-block form { margin: 0; }
 .scrape-block .hint { margin: 0; }
 .btn-scrape {
-  background: var(--accent); color: #fff; border: 0; border-radius: 6px;
-  padding: 7px 14px; font: inherit; cursor: pointer;
+  background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: 0.3125em;
+  padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; min-height: 44px;
 }
 .btn-scrape:hover { opacity: 0.92; }
 
@@ -374,3 +507,4 @@ form.product details.advanced .field:last-of-type { margin-bottom: 0; }
   display: inline-block; margin-left: 6px; font-size: 11px; padding: 1px 6px; border-radius: 10px;
   background: color-mix(in oklab, var(--accent) 15%, var(--surface-1)); color: var(--accent);
 }
+

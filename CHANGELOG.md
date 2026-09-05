@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.21.0 — 2026-09-05
+
+- Dashboard UI reworked as a jQuery-Mobile-style app: a header bar
+  (hamburger menu, page title, a contextual button) instead of a row
+  of tabs, and jQM listviews instead of tables for anything
+  listing-shaped. The hamburger opens a left-side panel with Products,
+  Hidden, Sites, Monitor and Manage products; it's a native
+  `<details>`, so it (and every link in it) works with JavaScript off.
+- The landing page (`/`) is now the product list: one line per
+  product, name plus a count of its qualifying listings, tap through
+  to that product's results. `/?product=<slug>` (the old Deals URL)
+  redirects to the new `/deals/<slug>`.
+- Deals is now **Results** (`/deals/<slug>`): one row per listing
+  (photo, title, price, a muted meta line) instead of a wide table; a
+  back button returns to Products, an Edit button goes to that
+  product's admin page. The KPI tiles and the manual-checks card are
+  gone.
+- **Filters** (score, price, sites, distance, age, hard fails) plus a
+  new **Sort** control live in a jQM collapsible on the results page,
+  closed unless something's active.
+- New **Fields** panel on the results page: check off exactly which
+  attributes show on every listing (thumbnail, price, est. value, vs
+  est./vs median, $/unit, score, distance, site, condition, seller
+  rating, first/last seen, flags, the "new" badge). The choice is
+  saved for every product (a `listing_fields` row in the db's
+  `settings` table), not just this one.
+- New **Pin**, the opposite of Hide: floats a listing to its own
+  "Pinned" bucket at the top of the results page, ahead of the "All"
+  bucket, in the same sort order. Falls back to no pinning (no
+  button, no buckets) on a db from before the `pinned_at` column.
+- **Hidden** (`/hidden`) now always covers every product by default
+  (a Product filter narrows it), restyled as the same listview as
+  Results, with the product name on each row.
+- Removed the **History** and **Backtests** pages, and the price
+  history / backtests data paths behind them, from the dashboard —
+  that data and those MCP tools are going away in a separate change.
+- Restyled every remaining page (Sites, Manage products, product
+  forms) with the same jQM look: shaded header-row tables, rounded
+  bordered controls, consistent light/dark tokens.
+
 ## 0.20.1 — 2026-09-04
 
 - Deals page: the product picker sits alone on top, full width, and

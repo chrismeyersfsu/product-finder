@@ -1,8 +1,10 @@
 ---
 /** Hide / unhide a listing. A real form post to /api/hide (works with
  * JavaScript off: the server redirects back to `back`); with JS the
- * submit is intercepted, posted with fetch, and the enclosing table
- * row is removed in place so the page keeps its scroll and filters. */
+ * submit is intercepted, posted with fetch, and the enclosing row
+ * (a table `<tr>` on the older table pages, a listview `<li>` on the
+ * results/Hidden pages) is removed in place so the page keeps its
+ * scroll and filters. */
 interface Props { id: number; hidden: boolean; back: string }
 const { id, hidden, back } = Astro.props;
 ---
@@ -28,7 +30,7 @@ const { id, hidden, back } = Astro.props;
         headers: { accept: "application/json" },
       });
       if (!res.ok) throw new Error(String(res.status));
-      const row = form.closest("tr");
+      const row = form.closest("tr, li");
       if (row) row.remove();
       else location.reload();
     } catch {

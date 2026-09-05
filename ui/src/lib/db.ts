@@ -1,12 +1,13 @@
 /**
  * Read-only data access for the UI. Owns every SELECT in the UI and
  * nothing else: opens the product-finder SQLite db readonly, never
- * writes (src/lib/hide.ts and src/lib/products.ts own the UI's
- * writes), never creates it, and renders "no db yet" as empty results
- * rather than throwing.
+ * writes (src/lib/hide.ts, lib/pin.ts and lib/products.ts own the
+ * UI's writes; lib/settings.ts owns settings writes), never creates
+ * it, and renders "no db yet" as empty results rather than throwing.
  * Server-side only — never import from client scripts. Schema is owned
  * by packages/core (storage.py); this module only reads it. Deals never
- * include hidden listings (hidden_at set).
+ * include hidden listings (hidden_at set); pinned ones (pinned_at set)
+ * still show, sorted into their own bucket by the results page.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -65,28 +66,15 @@ export interface Listing {
   first_seen: string;
   last_seen: string;
   hidden_at: string | null;
+  /** Pinned listings float to the top of the results page, in their
+   *  own bucket. Always null on a db that predates the pinned_at
+   *  column — see pinningAvailable(). */
+  pinned_at: string | null;
   image_url: string | null;
   est_value: number | null;
   median_price?: number;
   pct_vs_median?: number;
   pct_vs_est?: number;
-}
-export interface Observation {
-  site_slug: string;
-  url: string;
-  title: string;
-  price: number;
-  score: number | null;
-  kind: string;
-  observed_at: string;
-  distance_mi: number | null;
-}
-export interface BacktestRow {
-  id: number;
-  product_slug: string;
-  created_at: string;
-  params: Record<string, unknown>;
-  results?: Record<string, unknown>;
 }
 export interface SiteRow {
   slug: string;
@@ -161,6 +149,24 @@ function withDb<T>(empty: T, fn: (db: Database.Database) => T): T {
 
 export function hasDb(): boolean {
   return dbPath() !== null;
+}
+
+/** Whether this db has been migrated with the listings.pinned_at
+ *  column yet. Checked once per process (PRAGMA table_info is cheap,
+ *  but the schema doesn't change while the server is running) and
+ *  cached; deals() and the results page use this to fall back to "no
+ *  pins" — an empty pinned bucket, no Pin button — on an older db
+ *  instead of offering a control that would always fail. */
+let pinnedColumnChecked = false;
+let pinnedColumnPresent = false;
+export function pinningAvailable(): boolean {
+  if (!pinnedColumnChecked) {
+    pinnedColumnPresent = withDb(false, (db) =>
+      (db.prepare("PRAGMA table_info(listings)").all() as { name: string }[]).some((c) => c.name === "pinned_at")
+    );
+    pinnedColumnChecked = true;
+  }
+  return pinnedColumnPresent;
 }
 
 export function listProducts(): Product[] {
@@ -240,6 +246,7 @@ export function deals(productSlug: string, f: DealFilters = {}): Listing[] {
     ...r,
     hard_fails: JSON.parse(r.hard_fails),
     flags: JSON.parse(r.flags ?? "[]"),
+    pinned_at: r.pinned_at ?? null, // absent entirely on a pre-migration db
   }));
   const prices = listings.map((l) => l.price).filter((p): p is number => p != null && p > 0);
   if (prices.length) {
@@ -284,37 +291,19 @@ export function listingSites(productSlug: string): string[] {
   );
 }
 
-export function listBacktests(productSlug?: string): BacktestRow[] {
-  return withDb([] as BacktestRow[], (db) => {
-    const sql =
-      "SELECT id, product_slug, params, created_at FROM backtests" +
-      (productSlug ? " WHERE product_slug = ?" : "") +
-      " ORDER BY id DESC";
-    const rows = productSlug ? db.prepare(sql).all(productSlug) : db.prepare(sql).all();
-    return rows.map((r: any) => ({ ...r, params: JSON.parse(r.params) }));
-  });
-}
-
-export function getBacktest(id: number): BacktestRow | null {
-  return withDb(null as BacktestRow | null, (db) => {
-    const r: any = db.prepare("SELECT * FROM backtests WHERE id = ?").get(id);
-    return r ? { ...r, params: JSON.parse(r.params), results: JSON.parse(r.results) } : null;
-  });
-}
-
-/** Observations don't carry a location; distance comes from the
- *  matching listing (same product + url) when we still have it. */
-export function history(productSlug: string, kind?: string, maxDistance?: number): Observation[] {
-  return withDb([] as Observation[], (db) => {
-    let sql =
-      "SELECT h.site_slug, h.url, h.title, h.price, h.score, h.kind, h.observed_at, l.distance_mi" +
-      " FROM price_history h LEFT JOIN listings l ON l.product_slug = h.product_slug AND l.url = h.url" +
-      " WHERE h.product_slug = ?";
-    const args: unknown[] = [productSlug];
-    if (kind) { sql += " AND h.kind = ?"; args.push(kind); }
-    if (maxDistance != null) { sql += " AND l.distance_mi IS NOT NULL AND l.distance_mi <= ?"; args.push(maxDistance); }
-    sql += " ORDER BY h.observed_at";
-    return db.prepare(sql).all(...args) as Observation[];
+/** Generic JSON-typed settings read, mirroring storage.py's
+ *  get_setting (the write side is lib/settings.ts's setSetting, which
+ *  mirrors set_setting). `fallback` covers a missing key, a missing
+ *  db, and unparseable JSON alike. */
+export function getSetting<T>(key: string, fallback: T): T {
+  return withDb(fallback, (db) => {
+    const r: any = db.prepare("SELECT value FROM settings WHERE key = ?").get(key);
+    if (!r) return fallback;
+    try {
+      return JSON.parse(r.value) as T;
+    } catch {
+      return fallback;
+    }
   });
 }
 
@@ -331,17 +320,6 @@ export function homeHint(): string | null {
     return parts.length > 1 ? parts.slice(-2).join(", ") : null;
   });
 }
-
-
-export function historySites(productSlug: string): string[] {
-  return withDb([] as string[], (db) =>
-    db
-      .prepare("SELECT DISTINCT site_slug FROM price_history WHERE product_slug = ? ORDER BY site_slug")
-      .all(productSlug)
-      .map((r: any) => r.site_slug)
-  );
-}
-
 export function listSites(): SiteRow[] {
   return withDb([] as SiteRow[], (db) =>
     db

@@ -1,0 +1,264 @@
+---
+/** Results for one product: a jQuery-Mobile-style listview of its
+ * best deals, one row per listing (photo left, price/meta right).
+ * Listings first seen in the last NEW_DAYS days are marked "new";
+ * `?new=N` keeps only listings first seen within N days. Each row can
+ * be hidden (see /hidden) and pinned to the top (see lib/pin.ts):
+ * pinned listings render first, under a "Pinned" list-divider, then
+ * the rest under an "All" divider — the same sort applies within each
+ * bucket. Pinning is skipped entirely (no button, no dividers) on a db
+ * that predates the pinned_at column (db.pinningAvailable()). Filters
+ * and Sort live inside one collapsible, closed unless a filter is
+ * active or a non-default sort is picked; `sort` only reorders the
+ * array in memory here — it never touches db.deals's own query or its
+ * default order (score desc, price asc). A second "Fields"
+ * collapsible lets the viewer toggle which attributes show on each
+ * row at all (a global preference, one `listing_fields` row in the
+ * `settings` table via lib/settings.ts, applied to every product); its
+ * own POST handler lives on this page, same pattern as the other
+ * write routes (same-origin check, redirect back to the same URL).
+ * Unknown slug -> 404 (mirrors /products/[slug]); no products at all
+ * in the db -> the same "no products" empty state the old Deals page
+ * showed. Nothing renders between Filters/Fields and the listview —
+ * no KPI tiles, no summary line, no manual-checks card (dropped along
+ * with the rest of the old Deals page). */
+export const prerender = false;
+import EmptyState from "../../components/EmptyState.astro";
+import HideButton from "../../components/HideButton.astro";
+import Layout from "../../layouts/Layout.astro";
+import PinButton from "../../components/PinButton.astro";
+import SiteMultiSelect from "../../components/SiteMultiSelect.astro";
+import { siteVar } from "../../lib/colors";
+import * as db from "../../lib/db";
+import { day, money, moneyCents, perUnit } from "../../lib/format";
+import { sameOrigin } from "../../lib/request";
+import { setSetting } from "../../lib/settings";
+
+/** Every attribute a listing row can show, and the label on its
+ * checkbox in the Fields collapsible. */
+const FIELD_DEFS: { key: string; label: string }[] = [
+  { key: "thumbnail", label: "Thumbnail" },
+  { key: "price", label: "Price" },
+  { key: "est_value", label: "Est. value" },
+  { key: "vs_est", label: "vs est." },
+  { key: "vs_median", label: "vs median" },
+  { key: "unit_price", label: "$/unit" },
+  { key: "score", label: "Score" },
+  { key: "distance", label: "≈ mi" },
+  { key: "site", label: "Site" },
+  { key: "condition", label: "Condition" },
+  { key: "seller", label: "Seller rating/feedback" },
+  { key: "first_seen", label: "First seen" },
+  { key: "last_seen", label: "Last seen" },
+  { key: "flags", label: "Flags (hard-fail / warning notes)" },
+  { key: "new_badge", label: `"New" badge` },
+];
+const DEFAULT_FIELDS = ["thumbnail", "price", "vs_est", "vs_median", "score", "site", "distance", "first_seen"];
+
+const slug = Astro.params.slug ?? "";
+const products = db.listProducts();
+
+if (db.hasDb() && products.length > 0 && !products.some((p) => p.slug === slug))
+  return new Response("no such product", { status: 404 });
+
+if (Astro.request.method === "POST") {
+  if (!sameOrigin(Astro.request)) return new Response("Cross-site POST refused", { status: 403 });
+  const form = await Astro.request.formData();
+  if (form.get("_action") === "save_fields") {
+    const selected = FIELD_DEFS.map((f) => f.key).filter((k) => form.get(`field_${k}`) === "1");
+    setSetting("listing_fields", selected);
+    return Astro.redirect(Astro.url.pathname + Astro.url.search, 303);
+  }
+}
+
+const product = products.find((p) => p.slug === slug);
+const url = Astro.url;
+const minScore = url.searchParams.get("min_score");
+const maxPrice = url.searchParams.get("max_price");
+const selectedSites = (url.searchParams.get("sites") ?? "").split(",").filter(Boolean);
+const includeHardFails = url.searchParams.get("hard_fails") === "1";
+const within = url.searchParams.get("within");
+const newWithin = url.searchParams.get("new");
+const sort = url.searchParams.get("sort") || "score";
+const homeHint = db.homeHint();
+/** How recent "new" is for the badge. */
+const NEW_DAYS = 2;
+const newSince = db.sinceIso(NEW_DAYS);
+const isNew = (r: db.Listing) => r.first_seen >= newSince;
+const filters: db.DealFilters = {
+  minScore: minScore ? Number(minScore) : undefined,
+  maxPrice: maxPrice ? Number(maxPrice) : undefined,
+  sites: selectedSites.length ? selectedSites : undefined,
+  includeHardFails,
+  maxDistance: within ? Number(within) : undefined,
+  newWithinDays: newWithin ? Number(newWithin) : undefined,
+};
+const rows = product ? [...db.deals(slug, filters)] : [];
+// Display-only re-sort; db.deals's own query and default order are
+// untouched (default here just keeps that order: score desc, price asc).
+if (sort === "price_asc") rows.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+else if (sort === "price_desc") rows.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
+else if (sort === "newest") rows.sort((a, b) => b.first_seen.localeCompare(a.first_seen));
+else if (sort === "distance") rows.sort((a, b) => (a.distance_mi ?? Infinity) - (b.distance_mi ?? Infinity));
+const sites = product ? db.listingSites(slug) : [];
+const knownSites = db.listSites().map((s) => s.slug);
+const back = url.pathname + url.search;
+// Pinned listings get their own bucket, ahead of the rest, in the same
+// sort order; skipped entirely on a db without the pinned_at column.
+const pinAvailable = db.pinningAvailable();
+const pinnedRows = pinAvailable ? rows.filter((r) => r.pinned_at) : [];
+const restRows = pinAvailable ? rows.filter((r) => !r.pinned_at) : rows;
+// Filters other than sort live behind the collapsible; it opens itself
+// whenever one of them is narrowing the results, or a non-default sort
+// is picked (so the control you just used stays visible).
+const activeFilters = [minScore, maxPrice, within, newWithin].filter((v) => v != null).length
+  + (selectedSites.length ? 1 : 0) + (includeHardFails ? 1 : 0);
+const filtersOpen = activeFilters > 0 || sort !== "score";
+
+const enabledFields = new Set(db.getSetting<string[]>("listing_fields", DEFAULT_FIELDS));
+const on = (key: string) => enabledFields.has(key);
+---
+<Layout
+  title={product ? product.name : "product-finder"}
+  active="home"
+  back={{ href: "/", label: "Products" }}
+  action={product ? { href: `/products/${encodeURIComponent(slug)}`, label: "Edit" } : undefined}
+>
+  {!db.hasDb() && <EmptyState what="database" tool="seed_defaults" />}
+  {!product ? (
+    <EmptyState what="products" tool="seed_defaults" />
+  ) : (
+    <>
+      <details class="collapsible" open={filtersOpen}>
+        <summary>Filters{activeFilters > 0 && <span class="badge">{activeFilters} active</span>}</summary>
+        <div class="collapsible-body">
+          <form class="filters" method="get" action={`/deals/${encodeURIComponent(slug)}`}>
+            <div class="sort-row">
+              <label for="pf-sort">Sort</label>
+              <select id="pf-sort" name="sort" onchange="this.form.requestSubmit()">
+                <option value="score" selected={sort === "score"}>Best match (score, then price)</option>
+                <option value="price_asc" selected={sort === "price_asc"}>Price: low to high</option>
+                <option value="price_desc" selected={sort === "price_desc"}>Price: high to low</option>
+                <option value="newest" selected={sort === "newest"}>Newest first</option>
+                <option value="distance" selected={sort === "distance"}>Closest first</option>
+              </select>
+            </div>
+            <div class="filter-fields">
+              <label>Min score
+                <input type="number" name="min_score" min="0" max="1" step="0.05" value={minScore ?? ""} placeholder="0.5" />
+              </label>
+              <label>Max price
+                <input type="number" name="max_price" min="0" step="10" value={maxPrice ?? ""} placeholder="any" />
+              </label>
+              <SiteMultiSelect options={sites} selected={selectedSites} />
+              <label title={homeHint ? `Miles from home (${homeHint}); listings with no known location are hidden when set` : "Set a home address with set_home(address) to enable"}>
+                <span>Within{homeHint && <span class="hint"> of {homeHint}</span>}</span>
+                <input type="number" name="within" min="1" step="any" inputmode="numeric" value={within ?? ""} placeholder="any mi" disabled={!homeHint} />
+              </label>
+              <label title="Only listings first seen within this many days">New within
+                <input type="number" name="new" min="0.5" step="any" inputmode="numeric" value={newWithin ?? ""} placeholder="any days" />
+              </label>
+              <label class="chk"><input type="checkbox" name="hard_fails" value="1" checked={includeHardFails} /> include hard fails</label>
+            </div>
+            <button type="submit">Apply</button>
+          </form>
+        </div>
+      </details>
+      <script>
+        // Keep the URL to the filters actually set: blank fields are
+        // dropped from the query string, whether Apply or a Sort/select
+        // auto-submit fires.
+        document.querySelector("form.filters")?.addEventListener("submit", (e) => {
+          for (const el of (e.currentTarget as HTMLFormElement).elements) {
+            const f = el as HTMLInputElement;
+            if (f.name && f.type !== "checkbox" && f.type !== "submit" && f.value === "") f.disabled = true;
+          }
+        });
+      </script>
+
+      <details class="collapsible">
+        <summary>Fields <span class="hint">— choose what shows on each listing</span></summary>
+        <div class="collapsible-body">
+          <form class="fields-form" method="post" action={`/deals/${encodeURIComponent(slug)}${url.search}`}>
+            <input type="hidden" name="_action" value="save_fields" />
+            <div class="field-toggles">
+              {FIELD_DEFS.map((f) => (
+                <label class="chk"><input type="checkbox" name={`field_${f.key}`} value="1" checked={on(f.key)} /> {f.label}</label>
+              ))}
+            </div>
+            <button type="submit">Save</button>
+          </form>
+        </div>
+      </details>
+
+      {rows.length === 0 ? (
+        <EmptyState what={`listings for ${product.name}`} tool={`run_search("${slug}")`} />
+      ) : (
+        (() => {
+          // One listing row; shared between the pinned and the "all" bucket.
+          const renderRow = (r: db.Listing) => {
+            const metaNodes = [];
+            if (on("site"))
+              metaNodes.push(
+                <span><span class="swatch" style={`background:${siteVar(r.site_slug, knownSites)}`}></span>{r.site_slug}</span>
+              );
+            if (on("score")) metaNodes.push(<span>score {r.score == null ? "—" : r.score.toFixed(2)}</span>);
+            if (on("distance")) metaNodes.push(<span>{r.distance_mi == null ? "≈ — mi" : `≈ ${r.distance_mi.toFixed(0)} mi`}</span>);
+            if (on("condition")) metaNodes.push(<span>{r.condition ?? "—"}</span>);
+            if (on("first_seen")) metaNodes.push(<span>first seen {day(r.first_seen)}</span>);
+            if (on("last_seen")) metaNodes.push(<span>last seen {day(r.last_seen)}</span>);
+            if (on("seller") && (r.seller_rating != null || r.seller_feedback_count != null))
+              metaNodes.push(<span>{r.seller_rating != null ? `${r.seller_rating}%` : "—"}{r.seller_feedback_count != null ? ` (${r.seller_feedback_count.toLocaleString()})` : ""}</span>);
+            if (on("unit_price") && r.unit_price != null && r.unit) metaNodes.push(<span>{perUnit(r.unit_price, r.unit)}</span>);
+            return (
+              <li class:list={[{ "ui-li-has-thumb": on("thumbnail") }]}>
+                <div class="ui-li">
+                  {on("thumbnail") && (
+                    r.image_url ? (
+                      <img class="ui-li-thumb" src={r.image_url} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" />
+                    ) : (
+                      <span class="ui-li-thumb-placeholder">no photo</span>
+                    )
+                  )}
+                  <div class="ui-li-body">
+                    <a class="ui-li-title" href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a>
+                    {on("new_badge") && isNew(r) && <span class="badge badge-new" title={`First seen ${r.first_seen.slice(0, 16).replace("T", " ")} UTC`}>new</span>}
+                    <div class="ui-li-price-row">
+                      {on("price") && <span class="ui-li-price">{moneyCents(r.price)}</span>}
+                      {on("vs_est") && r.pct_vs_est != null && (
+                        <span class={r.pct_vs_est <= 0 ? "ui-li-vs-good" : "ui-li-vs-bad"}>{r.pct_vs_est > 0 ? "+" : ""}{r.pct_vs_est}% vs est.</span>
+                      )}
+                      {on("vs_median") && r.pct_vs_median != null && (
+                        <span class={r.pct_vs_median <= 0 ? "ui-li-vs-good" : "ui-li-vs-bad"}>{r.pct_vs_median > 0 ? "+" : ""}{r.pct_vs_median}% vs median</span>
+                      )}
+                      {on("est_value") && r.est_value != null && <span class="ui-li-meta">est. {money(r.est_value)}</span>}
+                    </div>
+                    {metaNodes.length > 0 && (
+                      <div class="ui-li-meta">
+                        {metaNodes.map((node, i) => <>{i > 0 && " · "}{node}</>)}
+                      </div>
+                    )}
+                    {on("flags") && r.hard_fails.length > 0 && <div class="status status-critical"><span class="ic">✗</span>{r.hard_fails.join("; ")}</div>}
+                    {on("flags") && r.flags.length > 0 && <div class="status status-warning"><span class="ic">⚠</span>{r.flags.join("; ")}</div>}
+                  </div>
+                  <div class="ui-li-aside">
+                    {pinAvailable && <PinButton id={r.id} pinned={!!r.pinned_at} back={back} />}
+                    <HideButton id={r.id} hidden={false} back={back} />
+                  </div>
+                </div>
+              </li>
+            );
+          };
+          return (
+            <ul class="listview">
+              {pinnedRows.length > 0 && <li class="list-divider">Pinned</li>}
+              {pinnedRows.map(renderRow)}
+              {pinnedRows.length > 0 && <li class="list-divider">All</li>}
+              {restRows.map(renderRow)}
+            </ul>
+          );
+        })()
+      )}
+    </>
+  )}
+</Layout>
