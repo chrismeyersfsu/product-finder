@@ -18,11 +18,17 @@ def test_twenty_four_sites_unique_slugs():
 
 def test_facebook_marketplace_spec():
     fb = SITES["facebook-marketplace"]
-    assert fb["kind"] == "facebook_marketplace"
-    assert fb["config"]["region"] == "durham"
-    assert fb["config"]["radius_km"] == 80
-    assert fb["config"]["cookies_env"] == "FB_COOKIES"
-    assert "{region}" in fb["config"]["url"] and "{query}" in fb["config"]["url"]
+    assert fb["kind"] == "tiered"
+    kinds = [s["kind"] for s in _strategies(fb)]
+    assert kinds == ["facebook_json", "facebook_marketplace"]
+    fb_json = next(s for s in _strategies(fb) if s["kind"] == "facebook_json")
+    browser = next(s for s in _strategies(fb) if s["kind"] == "facebook_marketplace")
+    for strat in (fb_json, browser):
+        assert strat["config"]["region"] == "durham"
+        assert strat["config"]["radius_km"] == 80
+        assert "{region}" in strat["config"]["url"] and "{query}" in strat["config"]["url"]
+    assert browser["config"]["cookies_env"] == "FB_COOKIES"
+    assert "cookies_env" not in fb_json["config"]  # facebook_json is always anonymous
 
 
 def test_css_configs_complete():

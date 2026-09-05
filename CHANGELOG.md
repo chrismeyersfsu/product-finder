@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.23.0 — 2026-09-05
+
+- Facebook Marketplace searched over plain HTTP (one document GET + one
+  GraphQL POST per query, ~0.8 s) with the headless browser kept as a
+  fallback tier.
+
 ## 0.22.1 — 2026-09-05
 
 - Discogs listings show cover art: unauthenticated search rows come

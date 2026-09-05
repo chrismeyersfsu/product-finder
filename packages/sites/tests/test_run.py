@@ -119,7 +119,17 @@ def test_search_many_dedupes_and_reports_strategies(monkeypatch):
 
 
 def test_facebook_login_wall_error_is_clear(monkeypatch):
+    # Both tiers hit a login wall: facebook_json's document GET and the
+    # browser tier's render. json's wall is checked before any session
+    # harvesting, so it costs exactly one fetch._get call.
     monkeypatch.delenv("FB_COOKIES", raising=False)
+    monkeypatch.setattr(
+        fetch,
+        "_get",
+        lambda url, headers=None, timeout=25.0: (
+            FIXTURES / "facebook_json_login_wall.html"
+        ).read_text(),
+    )
     monkeypatch.setattr(
         fetch,
         "_get_browser",
@@ -129,20 +139,28 @@ def test_facebook_login_wall_error_is_clear(monkeypatch):
     )
     result = run.search_site(SITES["facebook-marketplace"], "x1 carbon")
     assert result["strategy"] is None and result["listings"] == []
+    assert "json: login wall" in result["error"]
     assert "login wall — set FB_COOKIES" in result["error"]
 
 
 def test_facebook_cookies_env_reaches_browser_seam(monkeypatch):
+    # facebook_json fails outright (no session tokens in this body) so
+    # search_site falls through to the browser tier, which is what this
+    # test actually exercises: cookies_env reaching fetch._get_browser.
     seen = {}
 
     def fake_browser(url, wait=None, timeout=30.0, cookies=None):
         seen["url"], seen["cookies"] = url, cookies
         return (FIXTURES / "facebook.html").read_text()
 
+    monkeypatch.setattr(
+        fetch, "_get", lambda url, headers=None, timeout=25.0: "<html>no tokens here</html>"
+    )
     monkeypatch.setattr(fetch, "_get_browser", fake_browser)
     monkeypatch.setenv("FB_COOKIES", "c_user=1; xs=abc")
     result = run.search_site(SITES["facebook-marketplace"], "thinkpad")
     assert result["error"] is None and result["strategy"] == "facebook_marketplace"
+    assert result["attempts"][0]["strategy"] == "facebook_json"
     assert seen["cookies"] == "c_user=1; xs=abc"
     assert "/marketplace/durham/search" in seen["url"] and "radius=80" in seen["url"]
     assert len(result["listings"]) == 3

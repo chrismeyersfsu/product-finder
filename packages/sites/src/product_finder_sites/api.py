@@ -47,11 +47,47 @@ a token, resolve the nearest store of `config["chain"]` to
 to that store's locationId — response shapes are per Kroger's
 published API reference; not independently curl-verified since this
 package holds no Kroger credentials.
+
+facebook_json is the plain-HTTP replacement for the browser-only
+facebook_marketplace tier, ported from the winning prototype of a
+2026-09-05 bake-off (product-finder-fb-requests/experiments/
+facebook-requests/report.md, "Integration" section; fb.py is
+proto_6_waterfall). Facebook server-renders the Marketplace search
+document with every token the search itself needs embedded as JSON:
+one GET harvests `lsd`/`jazoest`/`__spin_r,b,t`/`__hs`/`__hsi` and the
+server-resolved lat/lon/radius (regexes below), then one POST replays
+Facebook's own `CometMarketplaceSearchContentPaginationQuery` GraphQL
+query (pinned `doc_id`) with `cursor: None` — the prototype's
+null-cursor discovery: a null cursor returns the same first page the
+document itself would embed, so this fetcher never needs to parse the
+document's own feed, only its tokens. This pass fetches page 1 only
+(`_FB_PAGE_SIZE` = 24 items); `page_info.end_cursor`/`has_next_page` in
+the GraphQL response are there for a later pagination pass and are
+otherwise unused. A login wall in the document is checked before any
+session harvesting or POST, so a wall costs exactly one request and
+raises immediately (never retried — see BROWSER_KINDS/_TIER_LABEL in
+run.py for how that degrades to the browser tier). Retries
+(_call_with_retries) cover transport failures and 429/5xx with capped
+exponential backoff through the module-level `_sleep` seam (tests
+monkeypatch it to a no-op); a 4xx other than 429 is never retried, and
+the backoff base is 1s so a sustained retry sequence never exceeds
+~1 request/second. fetch.py's FetchError carries no structured status
+code or Retry-After, only an "HTTP nnn" message, so classification
+here is message-based (_fb_status_of/_fb_retryable) rather than
+attribute-based the way the prototype's own HTTPStatusError subclasses
+were. Any bare exception escaping fetch._get/_post is normalized to
+FetchError (the prototype's own author flagged this as his design's
+one gap; grafted here from the bake-off's runner-up). GraphQL
+soft-error and schema-drift handling (a 200 that isn't a success, a
+renamed/missing field, a systemic drift too large to trust) lives in
+parse.py's _parse_facebook_json, not here — this module only ever
+returns (body, page_url) or raises FetchError.
 """
 
 import base64
 import json
 import os
+import random
 import re
 import time
 import urllib.parse
@@ -315,6 +351,242 @@ def fetch_discogs_api(config: dict, query: str) -> tuple[str, str]:
     return json.dumps({"query": q, "releases": releases}), search_url
 
 
+# --------------------------------------------------------------------------
+# facebook_json: see the module docstring for the full flow. Constants and
+# regexes below are pinned from the 2026-09-05 capture (report.md/FLOW.md
+# in product-finder-fb-requests); doc_id rots when Facebook ships a new JS
+# bundle — see _parse_facebook_json_body's stale-doc_id handling in parse.py.
+# --------------------------------------------------------------------------
+
+_FB_GRAPHQL_URL = "https://www.facebook.com/api/graphql/"
+_FB_DOC_ID = "27212616558440397"
+_FB_FRIENDLY_NAME = "CometMarketplaceSearchContentPaginationQuery"
+_FB_PAGE_SIZE = 24
+
+# Durham, NC — what an anonymous document resolves to absent an explicit
+# lat/lon/radius token (which a live document usually, but not always,
+# carries); used only when harvesting can't find one.
+_FB_DEFAULT_LAT = 35.9886
+_FB_DEFAULT_LON = -78.9072
+_FB_DEFAULT_RADIUS_KM = 65.0
+
+_FB_LOGIN_MARKERS = ("login_form", 'action="/login/"', "You must log in")
+
+# Two shapes seen in the wild: a live document's `["LSD",[],{"token":...}]`
+# and a sanitized fixture's `["LSD",null,[],[{"token":...}]]` — the `null,`
+# and the array-wrapping around the token dict are both optional.
+_FB_LSD_RE = re.compile(r'"LSD",\s*(?:null,\s*)?\[\],\s*\[?\{"token":"([^"]+)"')
+_FB_SPIN_R_RE = re.compile(r'"__spin_r":(\d+)')
+_FB_SPIN_B_RE = re.compile(r'"__spin_b":"(\w+)"')
+_FB_SPIN_T_RE = re.compile(r'"__spin_t":(\d+)')
+_FB_HS_RE = re.compile(r'"haste_session":"([^"]+)"')
+_FB_HSI_RE = re.compile(r'"hsi":"(\d+)"')
+_FB_LATLON_RE = re.compile(
+    r'"filter_location_latitude":([-\d.]+),"filter_location_longitude":([-\d.]+)'
+)
+_FB_RADIUS_RE = re.compile(r'"filter_radius_km":([\d.]+)')
+
+# Matches fetch.py's own "HTTP {code}" convention so a bare
+# fetch.FetchError("HTTP 429") is classified correctly even though it
+# carries no structured .status attribute.
+_FB_HTTP_CODE_RE = re.compile(r"\bHTTP (\d{3})\b")
+
+_FB_MAX_ATTEMPTS = 4
+_FB_BASE_DELAY_S = 1.0
+_FB_MAX_DELAY_S = 8.0
+
+
+def _sleep(seconds: float) -> None:
+    """time.sleep through a seam so tests can monkeypatch retry backoff to
+    a no-op instead of actually waiting."""
+    time.sleep(seconds)
+
+
+def _fb_backoff_delay(attempt: int) -> float:
+    """attempt 1 -> ~1.0-1.1s, 2 -> ~2.0-2.2s, 3 -> ~4.0-4.4s, capped at
+    _FB_MAX_DELAY_S; a 1s base keeps a sustained retry sequence at or
+    under ~1 request/second."""
+    exp = min(_FB_MAX_DELAY_S, _FB_BASE_DELAY_S * (2 ** (attempt - 1)))
+    return exp + exp * 0.1 * random.random()
+
+
+def _fb_status_of(exc: Exception) -> int | None:
+    m = _FB_HTTP_CODE_RE.search(str(exc))
+    return int(m.group(1)) if m else None
+
+
+def _fb_retryable(exc: fetch.FetchError) -> bool:
+    status = _fb_status_of(exc)
+    if status is None:
+        # No recognizable HTTP code in the message: transport-shaped
+        # (connection reset, timeout, ...) — treat as retryable.
+        return True
+    return status == 429 or 500 <= status < 600
+
+
+def _call_with_retries(fn, *args, max_attempts: int = _FB_MAX_ATTEMPTS, **kwargs):
+    """Calls fn(*args, **kwargs), retrying per the policy in the module
+    docstring. Every attempt beyond the first sleeps via the _sleep seam
+    first. A non-retryable FetchError (a 4xx other than 429) or the
+    max_attempts'th failure propagates as-is."""
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            return fn(*args, **kwargs)
+        except fetch.FetchError as e:
+            if not _fb_retryable(e) or attempt >= max_attempts:
+                raise
+            _sleep(_fb_backoff_delay(attempt))
+
+
+def _fb_harvest_session(body: str, page_url: str) -> dict | None:
+    """Returns None (not an error — the caller decides that's fatal, since
+    this port always needs a session to build the GraphQL POST) when the
+    document carries no `lsd`."""
+    lsd_m = _FB_LSD_RE.search(body)
+    if not lsd_m:
+        return None
+    lsd = lsd_m.group(1)
+
+    def _grp(pattern: re.Pattern, default: str = "") -> str:
+        m = pattern.search(body)
+        return m.group(1) if m else default
+
+    latlon = _FB_LATLON_RE.search(body)
+    lat, lon = (
+        (float(latlon.group(1)), float(latlon.group(2)))
+        if latlon
+        else (_FB_DEFAULT_LAT, _FB_DEFAULT_LON)
+    )
+    radius_m = _FB_RADIUS_RE.search(body)
+    radius = float(radius_m.group(1)) if radius_m else _FB_DEFAULT_RADIUS_KM
+    return {
+        "lsd": lsd,
+        "jazoest": "2" + str(sum(ord(c) for c in lsd)),
+        "spin_r": _grp(_FB_SPIN_R_RE),
+        "spin_b": _grp(_FB_SPIN_B_RE),
+        "spin_t": _grp(_FB_SPIN_T_RE),
+        "hs": _grp(_FB_HS_RE),
+        "hsi": _grp(_FB_HSI_RE),
+        "lat": lat,
+        "lon": lon,
+        "radius_km": radius,
+        "referer": page_url,
+    }
+
+
+def _fb_graphql_variables(query: str, cursor: str | None, session: dict) -> dict:
+    return {
+        "count": _FB_PAGE_SIZE,
+        "cursor": cursor,
+        "params": {
+            "bqf": {"callsite": "COMMERCE_MKTPLACE_WWW", "query": query},
+            "browse_request_params": {
+                "commerce_enable_local_pickup": True,
+                "commerce_enable_shipping": True,
+                "commerce_search_and_rp_available": True,
+                "commerce_search_and_rp_category_id": [],
+                "commerce_search_and_rp_condition": None,
+                "commerce_search_and_rp_ctime_days": None,
+                "filter_location_latitude": session["lat"],
+                "filter_location_longitude": session["lon"],
+                "filter_price_lower_bound": 0,
+                "filter_price_upper_bound": 214748364700,
+                "filter_radius_km": session["radius_km"],
+            },
+            "custom_request_params": {
+                "browse_context": None,
+                "contextual_filters": [],
+                "referral_code": None,
+                "referral_ui_component": None,
+                "saved_search_strid": None,
+                "search_vertical": "C2C",
+                "seo_url": None,
+                "serp_landing_settings": {"virtual_category_id": ""},
+                "surface": "SEARCH",
+                "virtual_contextual_filters": [],
+            },
+        },
+        "scale": 1,
+        "__relay_internal__pv__GHLShouldChangeMarketplaceSponsoredDataFieldNamerelayprovider": False,
+    }
+
+
+def _fb_graphql_form_body(query: str, cursor: str | None, session: dict) -> str:
+    form = {
+        "av": "0",
+        "__user": "0",
+        "__a": "1",
+        "__comet_req": "15",
+        "lsd": session["lsd"],
+        "jazoest": session["jazoest"],
+        "__hs": session["hs"],
+        "__rev": session["spin_r"],
+        "__hsi": session["hsi"],
+        "__spin_r": session["spin_r"],
+        "__spin_b": session["spin_b"],
+        "__spin_t": session["spin_t"],
+        "__crn": "comet.fbweb.CometMarketplaceSearchRoute",
+        "fb_api_caller_class": "RelayModern",
+        "fb_api_req_friendly_name": _FB_FRIENDLY_NAME,
+        "server_timestamps": "true",
+        "doc_id": _FB_DOC_ID,
+        "variables": json.dumps(
+            _fb_graphql_variables(query, cursor, session), separators=(",", ":")
+        ),
+    }
+    return urllib.parse.urlencode(form)
+
+
+def _fb_graphql_headers(session: dict) -> dict:
+    return {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Referer": session["referer"],
+        "Origin": "https://www.facebook.com",
+        "X-FB-LSD": session["lsd"],
+        "X-FB-Friendly-Name": _FB_FRIENDLY_NAME,
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+    }
+
+
+def _fetch_facebook_json(config: dict, query: str) -> tuple[str, str]:
+    region = config.get("region", "durham")
+    radius_km = config.get("radius_km", 80)
+    doc_url = config["url"].format(
+        region=region, query=urllib.parse.quote_plus(query), radius_km=radius_km
+    )
+    doc_body = _call_with_retries(fetch._get, doc_url, headers=config.get("headers"), timeout=20.0)
+    if any(mark in doc_body for mark in _FB_LOGIN_MARKERS):
+        raise fetch.FetchError("login wall")
+    session = _fb_harvest_session(doc_body, doc_url)
+    if session is None:
+        raise fetch.FetchError("facebook_json: no session token (lsd) in search document")
+    form = _fb_graphql_form_body(query, None, session)  # cursor=None: page 0, see module docstring
+    headers = _fb_graphql_headers(session)
+    graphql_body = _call_with_retries(
+        fetch._post, _FB_GRAPHQL_URL, data=form, headers=headers, timeout=20.0
+    )
+    return graphql_body, doc_url
+
+
+def fetch_facebook_json(config: dict, query: str) -> tuple[str, str]:
+    """One GET of the Marketplace search document (harvests the session
+    tokens the GraphQL POST needs), then one POST of
+    CometMarketplaceSearchContentPaginationQuery with cursor=None for the
+    first page of listings — see the module docstring for the full flow
+    and the retry/login-wall policy. Never leaks anything but
+    fetch.FetchError."""
+    try:
+        return _fetch_facebook_json(config, query)
+    except fetch.FetchError:
+        raise
+    except Exception as e:  # a bare exception must not crash search_site
+        raise fetch.FetchError(f"facebook_json: {type(e).__name__}: {e}") from e
+
+
 FETCHERS = {
     "ebay_api": fetch_ebay_api,
     "bestbuy_api": fetch_bestbuy_api,
@@ -323,4 +595,5 @@ FETCHERS = {
     "kroger_api": fetch_kroger_api,
     "autolist_api": fetch_autolist_api,
     "discogs_api": fetch_discogs_api,
+    "facebook_json": fetch_facebook_json,
 }

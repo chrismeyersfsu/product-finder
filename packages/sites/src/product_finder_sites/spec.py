@@ -31,13 +31,20 @@ anonymous searches by IP and returns nothing), govdeals, staples
 (resets even real-browser connections), reddit (403s datacenter IPs
 on .json). Craigslist needs a region subdomain in its url.
 
-facebook-marketplace is browser-only (kind "facebook_marketplace":
-fully JS-rendered, no public API, usually login-walled) with its own
-parser in parse.py. config keys: region (a Marketplace location slug,
-default "durham"), radius_km (default 80 ~ 50 miles around the region
-— the URL takes no ZIP anonymously), and cookies_env naming the env
-var (FB_COOKIES) whose cookie-header value, when set, is injected into
-the browser context for a logged-in search.
+facebook-marketplace is "tiered": a plain-HTTP tier (kind
+"facebook_json") tried first, falling back to the JS-rendered browser
+tier (kind "facebook_marketplace", usually login-walled) only when the
+plain tier fails. facebook_json is a 2026-09-05 bake-off port (see
+api.py's fetch_facebook_json / parse.py's _parse_facebook_json
+docstrings) — one document GET plus one GraphQL POST per query, no
+browser required, and no new workspace dependency (stdlib urllib via
+the existing fetch._get/_post seam). Both tiers' config keys: region (a
+Marketplace location slug, default "durham"), radius_km (default 80 ~
+50 miles around the region — the URL takes no ZIP anonymously); the
+browser tier additionally takes cookies_env naming the env var
+(FB_COOKIES) whose cookie-header value, when set, is injected into the
+browser context for a logged-in search (facebook_json is always
+anonymous — it has no cookie-jar concept).
 
 harris-teeter and food-lion are the two local grocery sites (added for
 a Durham 27705 shopper), each scoped to one physical store via a
@@ -386,13 +393,38 @@ _FLAT_SITES = [
     {
         "slug": "facebook-marketplace",
         "name": "Facebook Marketplace",
-        "kind": "facebook_marketplace",
+        "kind": "tiered",
         "config": {
-            "url": "https://www.facebook.com/marketplace/{region}/search"
-            "?query={query}&radius={radius_km}",
-            "region": "durham",
-            "radius_km": 80,
-            "cookies_env": "FB_COOKIES",
+            "strategies": [
+                {
+                    "kind": "facebook_json",
+                    "config": {
+                        "url": "https://www.facebook.com/marketplace/{region}/search"
+                        "?query={query}&radius={radius_km}",
+                        "region": "durham",
+                        "radius_km": 80,
+                        "headers": {
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                            "image/avif,image/webp,image/apng,*/*;q=0.8",
+                            "Upgrade-Insecure-Requests": "1",
+                            "Sec-Fetch-Dest": "document",
+                            "Sec-Fetch-Mode": "navigate",
+                            "Sec-Fetch-Site": "none",
+                            "Sec-Fetch-User": "?1",
+                        },
+                    },
+                },
+                {
+                    "kind": "facebook_marketplace",
+                    "config": {
+                        "url": "https://www.facebook.com/marketplace/{region}/search"
+                        "?query={query}&radius={radius_km}",
+                        "region": "durham",
+                        "radius_km": 80,
+                        "cookies_env": "FB_COOKIES",
+                    },
+                },
+            ]
         },
     },
     {

@@ -46,6 +46,24 @@ secondhand); location is always None (sellers ship from all over); a
 numeric) alongside the usual keys, for a car/game-style extractor that
 wants it structured rather than title-mined.
 
+facebook_json rows come from the CometMarketplaceSearchContentPaginationQuery
+GraphQL response api.py's fetch_facebook_json returns (see that module's
+docstring for the fetch side) — ported from the resilience-first
+waterfall bake-off prototype (product-finder-fb-requests/experiments/
+facebook-requests/report.md). `_parse_facebook_json` raises (never
+returns `[]`) on every soft-error/schema-drift shape — a `for (;;);`
+ajax error (stale doc_id or otherwise), `errors[]`/
+`data.marketplace_search: null`, a missing `feed_units` key, or every
+item in a non-empty edge batch failing to parse — so run.search_site's
+generic "a bad parse must not kill the run" handling falls through to
+the browser tier instead of reporting a false "no items parsed"; a
+genuinely empty `edges: []` still returns `[]` (that line is drawn on
+total edge count, not on output count). Rows carry the same keys as
+the DOM-based facebook_marketplace parser (title, price, url, location,
+seller_rating/seller_feedback_count always None, image_url) since the
+storage contract is unchanged; location is "City, ST" from the node's
+reverse_geocode, or just the city, or None.
+
 Dealer used-car rows (autolist_api, carscom, carvana) are titled
 "[Used] YEAR Make Model Trim, <odometer> mi" so the car products'
 year/mileage extractors read them like a Craigslist title; condition
@@ -379,6 +397,134 @@ def _parse_facebook(page_url: str, body: str) -> list[dict]:
     return out
 
 
+# facebook_json: `error: 1357031` in a `for (;;);`-prefixed ajax body
+# means the pinned doc_id (api.py's _FB_DOC_ID) rotted — Facebook shipped
+# a new JS bundle. Treat that as "this strategy is dead for now", same
+# taxonomy bucket as any other GraphQL soft error, not "no results".
+_FB_STALE_DOC_ID = 1357031
+
+
+def _fb_price_and_currency(price_info: dict) -> tuple[float | None, str | None]:
+    amount = price_info.get("amount")
+    price = None
+    if amount is not None:
+        try:
+            price = float(amount)
+        except (TypeError, ValueError):
+            price = None
+    formatted = price_info.get("formatted_amount") or ""
+    currency = "USD" if "$" in formatted else None
+    return price, currency
+
+
+def _fb_location(loc: dict) -> str | None:
+    geo = loc.get("reverse_geocode") or {}
+    city, state = geo.get("city"), geo.get("state")
+    if city and state:
+        return f"{city}, {state}"
+    return city or None
+
+
+def _parse_facebook_json_listing(listing: dict) -> dict:
+    """Raises KeyError/TypeError/ValueError when a required field is
+    missing or the wrong shape; the caller (_parse_facebook_json_edges)
+    turns that into a per-item skip, not a crash."""
+    listing_id = listing["id"]
+    if not listing_id:
+        raise ValueError("empty listing id")
+    title = listing.get("custom_title") or listing["marketplace_listing_title"]
+    if not title:
+        raise ValueError("empty title")
+    price, _currency = _fb_price_and_currency(listing.get("listing_price") or {})
+    location = _fb_location(listing.get("location") or {})
+    photo = listing.get("primary_listing_photo") or {}
+    image_url = (photo.get("image") or {}).get("uri")
+    return {
+        "title": title,
+        "price": price,
+        "url": f"https://www.facebook.com/marketplace/item/{listing_id}/",
+        "location": location,
+        "seller_rating": None,
+        "seller_feedback_count": None,
+        "image_url": image_url,
+    }
+
+
+def _parse_facebook_json_edges(edges: list) -> list[dict]:
+    """Per-item schema-drift tolerance: a renamed/missing field on one
+    item skips that item silently — it must not kill the batch. But if
+    *every* item in a non-empty batch fails, that's systemic drift, not
+    noise: raise instead of quietly returning `[]` (a legitimately empty
+    batch, `edges == []`, still returns `[]` — the line is drawn on
+    `total > 0`, not on `out == []`)."""
+    out = []
+    total = len(edges)
+    for edge in edges:
+        node = edge.get("node") or {}
+        if node.get("__typename") != "MarketplaceFeedListingStoryObject":
+            continue  # ad/upsell unit, not a listing — expected, not an error
+        listing = node.get("listing")
+        if not isinstance(listing, dict):
+            continue
+        try:
+            out.append(_parse_facebook_json_listing(listing))
+        except (KeyError, TypeError, ValueError):
+            continue
+    if total > 0 and not out:
+        raise ValueError(
+            f"all {total} feed items failed to parse — systemic schema drift, not per-item noise"
+        )
+    return out
+
+
+def _parse_facebook_json_body(body: str) -> dict:
+    """A 200 is not a success. Body may be multi-line
+    (`server_timestamps=true` streams `is_final` chunks) — parse the
+    first parseable line. Checks, in order: the `for (;;);` ajax-error
+    prefix (distinguishing stale-doc_id 1357031 from any other ajax
+    error), then `errors[]` / `data.marketplace_search is null`, then a
+    missing `feed_units` key. Raises on every one of those shapes so
+    `_parse_facebook_json` never returns `[]` for a soft failure."""
+    lines = [ln for ln in body.splitlines() if ln.strip()]
+    if not lines:
+        raise ValueError("empty GraphQL response body")
+    parsed = None
+    last_err = None
+    for line in lines:
+        text = line[len("for (;;);") :] if line.startswith("for (;;);") else line
+        try:
+            parsed = json.loads(text)
+            break
+        except json.JSONDecodeError as e:
+            last_err = e
+    if parsed is None or not isinstance(parsed, dict):
+        raise ValueError(f"GraphQL response body is not parseable JSON on any line: {last_err}")
+    if "error" in parsed and "errorSummary" in parsed:
+        code = parsed.get("error")
+        if code == _FB_STALE_DOC_ID:
+            raise ValueError(f"doc_id rotted: {parsed.get('errorSummary')}")
+        raise ValueError(f"GraphQL ajax error {code}: {parsed.get('errorSummary')}")
+    data = parsed.get("data") or {}
+    marketplace_search = data.get("marketplace_search")
+    if marketplace_search is None:
+        soft_errors = parsed.get("errors") or []
+        message = (
+            soft_errors[0].get("message") if soft_errors else "data.marketplace_search is null"
+        )
+        raise ValueError(message)
+    feed_units = marketplace_search.get("feed_units")
+    if feed_units is None:
+        raise ValueError(
+            "GraphQL response has marketplace_search but no feed_units — feed shape changed"
+        )
+    return feed_units
+
+
+def _parse_facebook_json(page_url: str, body: str) -> list[dict]:
+    feed_units = _parse_facebook_json_body(body)
+    return _parse_facebook_json_edges(feed_units.get("edges") or [])
+
+
 def _parse_goodwill_api(body: str) -> list[dict]:
     out = []
     for item in _json_items(body, "searchResults", "items"):
@@ -695,6 +841,8 @@ def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
         return _parse_css(strategy["config"], page_url, body)
     if kind == "facebook_marketplace":
         return _parse_facebook(page_url, body)
+    if kind == "facebook_json":
+        return _parse_facebook_json(page_url, body)
     if kind == "ebay_api":
         return _parse_ebay_api(body)
     if kind == "bestbuy_api":

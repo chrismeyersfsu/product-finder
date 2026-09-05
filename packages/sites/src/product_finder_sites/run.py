@@ -25,7 +25,7 @@ from . import api, fetch, parse
 
 # Compact tier labels for the per-site error string ("api: KEY unset;
 # css: HTTP 403; browser: challenge page") shown verbatim by /sites.
-_TIER_LABEL = {"css": "css", "reddit_json": "json"}
+_TIER_LABEL = {"css": "css", "reddit_json": "json", "facebook_json": "json"}
 
 # Wall/challenge pages that answer 200 with no items.
 _CHALLENGE_RE = re.compile(
