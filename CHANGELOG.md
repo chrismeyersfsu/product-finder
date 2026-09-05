@@ -26,6 +26,8 @@
 - Pin is a pushpin icon on results rows.
 - Swipe a results row left to hide it (iOS-style); the Hide button
   remains on desktop.
+- Edit product has a back button to the product's results; New
+  product has one to the product list.
 
 ## 0.22.1 — 2026-09-05
 

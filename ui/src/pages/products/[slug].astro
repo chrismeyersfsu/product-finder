@@ -64,7 +64,7 @@ if (scrape.runningSince) scrapeLine = `Running since ${hhmm(scrape.runningSince)
 else if (scrape.queued) scrapeLine = "Queued — waiting for the scraper";
 else if (scrape.last) scrapeLine = `Last on-demand scrape ${hhmm(scrape.last.at)}: ${scrape.last.text}`;
 ---
-<Layout title={`Edit ${product.name}`} active="home">
+<Layout title={`Edit ${product.name}`} active="home" back={{ href: `/deals/${encodeURIComponent(slug)}`, label: "Results" }}>
   <div class="card">
     <h2>
       Edit product <span class="sub">— {slug}, created {day(product.created_at)}, updated {day(product.updated_at)}</span>
