@@ -46,23 +46,27 @@ secondhand); location is always None (sellers ship from all over); a
 numeric) alongside the usual keys, for a car/game-style extractor that
 wants it structured rather than title-mined.
 
-facebook_json rows come from the CometMarketplaceSearchContentPaginationQuery
-GraphQL response api.py's fetch_facebook_json returns (see that module's
-docstring for the fetch side) — ported from the resilience-first
-waterfall bake-off prototype (product-finder-fb-requests/experiments/
-facebook-requests/report.md). `_parse_facebook_json` raises (never
-returns `[]`) on every soft-error/schema-drift shape — a `for (;;);`
-ajax error (stale doc_id or otherwise), `errors[]`/
-`data.marketplace_search: null`, a missing `feed_units` key, or every
-item in a non-empty edge batch failing to parse — so run.search_site's
-generic "a bad parse must not kill the run" handling falls through to
-the browser tier instead of reporting a false "no items parsed"; a
-genuinely empty `edges: []` still returns `[]` (that line is drawn on
-total edge count, not on output count). Rows carry the same keys as
-the DOM-based facebook_marketplace parser (title, price, url, location,
-seller_rating/seller_feedback_count always None, image_url) since the
-storage contract is unchanged; location is "City, ST" from the node's
-reverse_geocode, or just the city, or None.
+facebook_json rows come from the Marketplace search document api.py's
+fetch_facebook_json returns (see that module's docstring for the fetch
+side) — ported from the resilience-first waterfall bake-off prototype's
+strategy 1 (product-finder-fb-requests/experiments/facebook-requests/
+report.md; fb.py's `_find_feed_units`). Page 1 of results is embedded in
+the document as a `<script type="application/json" data-sjs>` blob
+mentioning `marketplace_search`; `_parse_facebook_json` finds that
+blob, `json.loads`s it, and recursively locates the first dict carrying
+a `feed_units` key (never path-walks the `require`/`__bbox` nesting —
+that rots more often than the payload it wraps). It raises (never
+returns `[]`) on every schema-drift shape — no such blob found, a blob
+found but no `feed_units` anywhere inside it, invalid/truncated JSON,
+or every item in a non-empty edge batch failing to parse — so
+run.search_site's generic "a bad parse must not kill the run" handling
+falls through to the browser tier instead of reporting a false "no
+items parsed"; a genuinely empty `edges: []` still returns `[]` (that
+line is drawn on total edge count, not on output count). Rows carry the
+same keys as the DOM-based facebook_marketplace parser (title, price,
+url, location, seller_rating/seller_feedback_count always None,
+image_url) since the storage contract is unchanged; location is
+"City, ST" from the node's reverse_geocode, or just the city, or None.
 
 Dealer used-car rows (autolist_api, carscom, carvana) are titled
 "[Used] YEAR Make Model Trim, <odometer> mi" so the car products'
@@ -397,11 +401,62 @@ def _parse_facebook(page_url: str, body: str) -> list[dict]:
     return out
 
 
-# facebook_json: `error: 1357031` in a `for (;;);`-prefixed ajax body
-# means the pinned doc_id (api.py's _FB_DOC_ID) rotted — Facebook shipped
-# a new JS bundle. Treat that as "this strategy is dead for now", same
-# taxonomy bucket as any other GraphQL soft error, not "no results".
-_FB_STALE_DOC_ID = 1357031
+# facebook_json: type="application/json" and data-sjs can appear in
+# either attribute order, with extra attributes (data-content-len=...)
+# between them, so match on the tag's raw attribute text rather than a
+# fixed sequence.
+_FB_SCRIPT_RE = re.compile(r"<script\b([^>]*)>(.*?)</script>", re.DOTALL | re.IGNORECASE)
+
+
+def _fb_find_first_with_key(obj, key: str):
+    """Recursively find the first dict anywhere in `obj` that has `key`,
+    and return its value. Deliberately doesn't path-walk the
+    require/__bbox nesting Facebook's own bundle rots — it changes shape
+    more often than the payload it wraps does."""
+    if isinstance(obj, dict):
+        if key in obj:
+            return obj[key]
+        for v in obj.values():
+            found = _fb_find_first_with_key(v, key)
+            if found is not None:
+                return found
+    elif isinstance(obj, list):
+        for v in obj:
+            found = _fb_find_first_with_key(v, key)
+            if found is not None:
+                return found
+    return None
+
+
+def _fb_find_feed_units(body: str) -> dict:
+    """Find the `<script data-sjs>` blob that mentions `marketplace_search`,
+    json.loads it, and recursively locate the first `feed_units` dict
+    inside. Raises on every shape that isn't a legitimate (possibly
+    empty) result set, so `_parse_facebook_json` never returns `[]` for a
+    schema-drift failure. Login walls are checked by api.py's
+    fetch_facebook_json before this ever runs — not this function's
+    concern."""
+    saw_marketplace_search_blob = False
+    for m in _FB_SCRIPT_RE.finditer(body):
+        attrs, content = m.group(1), m.group(2)
+        if "data-sjs" not in attrs or "marketplace_search" not in content:
+            continue
+        saw_marketplace_search_blob = True
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"embedded marketplace_search JSON is truncated/invalid: {e}") from e
+        feed_units = _fb_find_first_with_key(data, "feed_units")
+        if feed_units is not None:
+            return feed_units
+    if saw_marketplace_search_blob:
+        raise ValueError(
+            "marketplace_search blob found but no feed_units anywhere in it — feed shape changed"
+        )
+    raise ValueError(
+        "no marketplace_search script found in the document "
+        "— feed shape changed, or this isn't a search results page"
+    )
 
 
 def _fb_price_and_currency(price_info: dict) -> tuple[float | None, str | None]:
@@ -477,51 +532,8 @@ def _parse_facebook_json_edges(edges: list) -> list[dict]:
     return out
 
 
-def _parse_facebook_json_body(body: str) -> dict:
-    """A 200 is not a success. Body may be multi-line
-    (`server_timestamps=true` streams `is_final` chunks) — parse the
-    first parseable line. Checks, in order: the `for (;;);` ajax-error
-    prefix (distinguishing stale-doc_id 1357031 from any other ajax
-    error), then `errors[]` / `data.marketplace_search is null`, then a
-    missing `feed_units` key. Raises on every one of those shapes so
-    `_parse_facebook_json` never returns `[]` for a soft failure."""
-    lines = [ln for ln in body.splitlines() if ln.strip()]
-    if not lines:
-        raise ValueError("empty GraphQL response body")
-    parsed = None
-    last_err = None
-    for line in lines:
-        text = line[len("for (;;);") :] if line.startswith("for (;;);") else line
-        try:
-            parsed = json.loads(text)
-            break
-        except json.JSONDecodeError as e:
-            last_err = e
-    if parsed is None or not isinstance(parsed, dict):
-        raise ValueError(f"GraphQL response body is not parseable JSON on any line: {last_err}")
-    if "error" in parsed and "errorSummary" in parsed:
-        code = parsed.get("error")
-        if code == _FB_STALE_DOC_ID:
-            raise ValueError(f"doc_id rotted: {parsed.get('errorSummary')}")
-        raise ValueError(f"GraphQL ajax error {code}: {parsed.get('errorSummary')}")
-    data = parsed.get("data") or {}
-    marketplace_search = data.get("marketplace_search")
-    if marketplace_search is None:
-        soft_errors = parsed.get("errors") or []
-        message = (
-            soft_errors[0].get("message") if soft_errors else "data.marketplace_search is null"
-        )
-        raise ValueError(message)
-    feed_units = marketplace_search.get("feed_units")
-    if feed_units is None:
-        raise ValueError(
-            "GraphQL response has marketplace_search but no feed_units — feed shape changed"
-        )
-    return feed_units
-
-
 def _parse_facebook_json(page_url: str, body: str) -> list[dict]:
-    feed_units = _parse_facebook_json_body(body)
+    feed_units = _fb_find_feed_units(body)
     return _parse_facebook_json_edges(feed_units.get("edges") or [])
 
 

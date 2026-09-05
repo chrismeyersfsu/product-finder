@@ -2,11 +2,10 @@
 
 ## 0.23.0 — 2026-09-05
 
-- Facebook Marketplace searched over plain HTTP (one document GET + one
-  GraphQL POST per query, ~1.2 s) with the headless browser kept as a
-  fallback tier. Requests are paced to one per second across queries,
-  and a GraphQL "Rate limit exceeded" answer is retried with backoff
-  instead of handed to the browser.
+- Facebook Marketplace searched over plain HTTP (one document GET per
+  query, ~1 s; page 1 is read from the feed embedded in the page) with
+  the headless browser kept as a fallback tier. Requests are paced to
+  one per second.
 
 ## 0.22.1 — 2026-09-05
 
