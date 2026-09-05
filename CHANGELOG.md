@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.20.1 — 2026-09-04
+
+- Deals page: the product picker sits alone on top, full width, and
+  switches product as soon as you pick one. The other filters (score,
+  price, sites, distance, age, hard fails) are folded behind a
+  **Filters** button — hidden by default, open with an "N active" badge
+  whenever one is set — with Apply at the bottom of the panel. Blank
+  filters no longer clutter the URL.
+- Products are listed by name, not slug, in the picker and on the
+  Products page.
+
 ## 0.20.0 — 2026-09-04
 
 - New product needs only a name: slug and search query are derived

@@ -83,11 +83,22 @@ header.top nav a[aria-current="page"] { color: var(--text-primary); font-weight:
 .card h2 { font-size: 14px; margin: 0 0 10px; }
 .card h2 .sub { color: var(--text-muted); font-weight: 400; }
 
-/* One filter row above the content it scopes */
-form.filters {
-  display: flex; flex-wrap: wrap; gap: 12px; align-items: end;
-  margin-bottom: 20px;
+/* Product picker on its own row, the rest of the filters folded behind
+   a Filters toggle (closed unless one of them is active). */
+form.filters { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+form.filters .product-pick select { width: 100%; max-width: 520px; padding: 7px 8px; font-size: 14px; }
+form.filters .filter-panel summary {
+  display: inline-flex; align-items: center; gap: 8px; width: max-content;
+  padding: 6px 12px; border: 1px solid var(--baseline); border-radius: 6px;
+  background: var(--surface-1); font-size: 13px; cursor: pointer; user-select: none;
 }
+form.filters .filter-panel summary::-webkit-details-marker { display: none; }
+form.filters .filter-panel summary::before { content: "\25B8"; font-size: 11px; color: var(--text-muted); }
+form.filters .filter-panel[open] summary::before { content: "\25BE"; }
+form.filters .filter-panel > summary > .badge {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+form.filters .filter-fields { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 12px 0; }
 form.filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
 form.filters input, form.filters select {
   background: var(--surface-1); color: var(--text-primary);
@@ -226,12 +237,14 @@ table.data[data-sortable] thead th:focus-visible { outline: 2px solid var(--acce
   .shell { padding: 0 12px 40px; }
   header.top { flex-wrap: wrap; gap: 6px 16px; padding: 14px 0 10px; }
   header.top nav { flex-wrap: wrap; gap: 4px 14px; }
-  form.filters { gap: 10px; }
-  form.filters > label, form.filters > .msel-wrap { flex: 1 1 calc(50% - 10px); min-width: 0; }
+  form.filters .product-pick select { max-width: none; }
+  form.filters .filter-panel summary { width: 100%; box-sizing: border-box; }
+  form.filters .filter-fields { gap: 10px; }
+  form.filters .filter-fields > label, form.filters .filter-fields > .msel-wrap { flex: 1 1 calc(50% - 10px); min-width: 0; }
   form.filters label.chk { flex-basis: 100%; }
   form.filters input:not([type="checkbox"]), form.filters select, .msel summary { width: 100%; }
   .msel-opt { padding: 6px; }
-  form.filters button { flex: 1 1 100%; padding: 9px 14px; }
+  form.filters button { width: 100%; padding: 9px 14px; }
   .tiles { grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 14px; }
   .tile { padding: 8px 10px; }
   .tile .label { font-size: 11px; line-height: 1.2; }

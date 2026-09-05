@@ -166,7 +166,7 @@ export function hasDb(): boolean {
 export function listProducts(): Product[] {
   return withDb([] as Product[], (db) =>
     db
-      .prepare("SELECT slug, name, description, manual_checks, max_price FROM products ORDER BY slug")
+      .prepare("SELECT slug, name, description, manual_checks, max_price FROM products ORDER BY name COLLATE NOCASE")
       .all()
       .map((r: any) => ({ ...r, manual_checks: JSON.parse(r.manual_checks) }))
   );
@@ -203,7 +203,7 @@ export function productSummaries(): ProductSummary[] {
          FROM products p
          LEFT JOIN listings l ON l.product_slug = p.slug
          GROUP BY p.slug
-         ORDER BY p.slug`
+         ORDER BY p.name COLLATE NOCASE`
       )
       .all()
       .map((r: any) => ({

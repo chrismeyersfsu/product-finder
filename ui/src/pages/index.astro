@@ -51,15 +51,22 @@ const noSeller = !rows.some((r) => r.seller_rating != null || r.seller_feedback_
 // When any row has a fitted market value, show Est. value / vs est.
 // instead of vs median (exactly one of the two renders).
 const hasEst = rows.some((r) => r.est_value != null);
+// Filters other than the product live behind a Filters toggle; it
+// opens itself whenever one of them is narrowing the results.
+const activeFilters = [minScore, maxPrice, within, newWithin].filter((v) => v != null).length
+  + (selectedSites.length ? 1 : 0) + (includeHardFails ? 1 : 0);
 ---
 <Layout title="Deals" active="deals" product={productSlug}>
   {!db.hasDb() && <EmptyState what="database" tool="seed_defaults" />}
   <form class="filters" method="get" action="/">
-    <label>Product
-      <select name="product">
+    <label class="product-pick">Product
+      <select name="product" onchange="this.form.requestSubmit()" data-autosubmit>
         {products.map((p) => <option value={p.slug} selected={p.slug === productSlug}>{p.name}</option>)}
       </select>
     </label>
+    <details class="filter-panel" open={activeFilters > 0}>
+      <summary>Filters{activeFilters > 0 && <span class="badge">{activeFilters} active</span>}</summary>
+      <div class="filter-fields">
     <label>Min score
       <input type="number" name="min_score" min="0" max="1" step="0.05" value={minScore ?? ""} placeholder="0.5" />
     </label>
@@ -75,8 +82,20 @@ const hasEst = rows.some((r) => r.est_value != null);
       <input type="number" name="new" min="0.5" step="any" inputmode="numeric" value={newWithin ?? ""} placeholder="any days" />
     </label>
     <label class="chk"><input type="checkbox" name="hard_fails" value="1" checked={includeHardFails} /> include hard fails</label>
-    <button type="submit">Apply</button>
+      </div>
+      <button type="submit">Apply</button>
+    </details>
   </form>
+  <script>
+    // Keep the URL to the filters actually set: blank fields are dropped
+    // from the query string, whether Apply or the product picker submits.
+    document.querySelector("form.filters")?.addEventListener("submit", (e) => {
+      for (const el of (e.currentTarget as HTMLFormElement).elements) {
+        const f = el as HTMLInputElement;
+        if (f.name && f.type !== "checkbox" && f.type !== "submit" && f.value === "") f.disabled = true;
+      }
+    });
+  </script>
 
   {product ? (
     <>
