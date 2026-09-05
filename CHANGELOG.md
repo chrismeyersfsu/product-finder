@@ -10,6 +10,9 @@
   filters no longer clutter the URL.
 - Products are listed by name, not slug, in the picker and on the
   Products page.
+- Deals page drops the stat tiles (qualifying, best/median price,
+  sites, new) and the "Verify by hand before buying" card; the
+  listing table is what's left below the filters.
 
 ## 0.20.0 — 2026-09-04
 
