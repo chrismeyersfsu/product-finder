@@ -17,7 +17,8 @@
   did pointed at an image proxy that refuses to serve them off-site).
   Results are now read from the page's embedded product data, which
   has a direct image for every item; existing B&H rows pick up their
-  image on the next scrape.
+  image on the next scrape. B&H also gets a headless-browser fallback:
+  it had been refusing about four plain-HTTP searches in five.
 
 ## 0.22.1 — 2026-09-05
 

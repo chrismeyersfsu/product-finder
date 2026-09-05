@@ -78,7 +78,8 @@ cap hides them). carscom reads each fuse-card's data-vehicle-details
 JSON attribute rather than the visible spans; carvana reads the
 per-vehicle schema.org Vehicle JSON-LD scripts on its results page.
 
-bhphotovideo reads the search page's `div.bh-preloaded-data` blob (the
+bhphotovideo (and bhphotovideo_browser, the same page fetched by the
+browser tier) reads the search page's `div.bh-preloaded-data` blob (the
 React store state, HTML-escaped JSON in its data-data attribute) at
 ListingStore.state.response.data.items rather than the SSR'd
 miniProductPage cards: B&H server-renders an <img> for only the first
@@ -927,6 +928,6 @@ def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
         return _parse_carscom(page_url, body)
     if kind == "carvana":
         return _parse_carvana(page_url, body)
-    if kind == "bhphotovideo":
+    if kind in ("bhphotovideo", "bhphotovideo_browser"):
         return _parse_bhphotovideo(page_url, body)
     raise ValueError(f"unknown strategy kind: {kind}")

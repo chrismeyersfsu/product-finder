@@ -38,7 +38,13 @@ _CHALLENGE_RE = re.compile(
 
 # Strategy kinds fetched by the browser seam (config may carry a
 # cookies_env naming an env var whose cookie header logs the page in).
-BROWSER_KINDS = {"browser_css", "facebook_marketplace", "carscom", "carvana"}
+BROWSER_KINDS = {
+    "browser_css",
+    "facebook_marketplace",
+    "carscom",
+    "carvana",
+    "bhphotovideo_browser",
+}
 
 
 def _label(kind: str) -> str:

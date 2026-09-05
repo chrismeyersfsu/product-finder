@@ -90,13 +90,15 @@ headless browser: autotrader, cargurus, carfax, truecar (captcha),
 carmax, edmunds, kbb (Akamai "Access Denied"); hemmings renders but is
 a classic-car site.
 
-bhphotovideo (kind "bhphotovideo", flat, plain HTTP) is fetched like a
-css site but parsed from the search page's bh-preloaded-data state blob
+bhphotovideo is tiered "bhphotovideo" (plain HTTP) then
+"bhphotovideo_browser" (same URL rendered headless, waiting for the
+state blob): both parse the search page's bh-preloaded-data state blob
 instead of its cards — B&H only server-renders an <img> for the first
 two cards, so a css parse loses ~95% of thumbnails (and the two it
-gets are behind a hotlink-blocked cdn-cgi proxy); see parse.py. Its
-plain HTTP is intermittently 403'd from this network; there is no
-browser tier for it yet.
+gets are behind a hotlink-blocked cdn-cgi proxy); see parse.py. Plain
+HTTP to B&H 403s roughly four requests in five from this network
+(2026-09-04/05 tally) while a headless render is answered, hence the
+browser fallback.
 
 discogs (kind "discogs_api", flat) is keyless via api.discogs.com: the
 marketplace HTML at discogs.com/sell is Cloudflare-walled, but the
@@ -242,8 +244,22 @@ _FLAT_SITES = [
     {
         "slug": "bhphotovideo",
         "name": "B&H Photo Video",
-        "kind": "bhphotovideo",
-        "config": {"url": "https://www.bhphotovideo.com/c/search?q={query}"},
+        "kind": "tiered",
+        "config": {
+            "strategies": [
+                {
+                    "kind": "bhphotovideo",
+                    "config": {"url": "https://www.bhphotovideo.com/c/search?q={query}"},
+                },
+                {
+                    "kind": "bhphotovideo_browser",
+                    "config": {
+                        "url": "https://www.bhphotovideo.com/c/search?q={query}",
+                        "wait": "div.bh-preloaded-data",
+                    },
+                },
+            ]
+        },
     },
     _css(
         "microcenter",
