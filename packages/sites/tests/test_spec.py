@@ -1,4 +1,4 @@
-"""Registry contract: 28 sites, unique slugs, ordered strategies, complete configs."""
+"""Registry contract: 29 sites, unique slugs, ordered strategies, complete configs."""
 
 from product_finder_sites.spec import BUILTIN_SITES, JS_HEAVY, NO_PLAIN_HTML
 
@@ -13,7 +13,7 @@ def _strategies(site):
 
 def test_twenty_four_sites_unique_slugs():
     slugs = [s["slug"] for s in BUILTIN_SITES]
-    assert len(slugs) == 28 and len(set(slugs)) == 28
+    assert len(slugs) == 29 and len(set(slugs)) == 29
 
 
 def test_facebook_marketplace_spec():
@@ -81,3 +81,14 @@ def test_grocery_sites_carry_static_location_and_condition():
             if strat["kind"] in ("css", "browser_css"):
                 assert strat["config"]["condition"] == "new", slug
                 assert "27705" in strat["config"]["location"], slug
+
+
+def test_discogs_spec():
+    d = SITES["discogs"]
+    assert d["kind"] == "discogs_api"
+    assert d["config"] == {
+        "format": "vinyl",
+        "max_releases": 8,
+        "currency": "USD",
+        "skip_reissues": True,
+    }

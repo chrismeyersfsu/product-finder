@@ -1,0 +1,188 @@
+{
+  "query": "beck odelay",
+  "releases": [
+    {
+      "id": 235913,
+      "title": "Beck!* - Odelay",
+      "year": "1996",
+      "country": "US",
+      "label": [
+        "Bong Load Custom Records",
+        "Bong Load Custom Records"
+      ],
+      "format": [
+        "Vinyl",
+        "LP",
+        "Album",
+        "Limited Edition"
+      ],
+      "uri": "/release/235913-Beck-Odelay",
+      "thumb": "https://i.discogs.com/fake-thumb-235913.jpeg",
+      "cover_image": "",
+      "release": {
+        "title": "Odelay",
+        "year": 1996,
+        "country": "US",
+        "num_for_sale": 65,
+        "lowest_price": 0.41,
+        "uri": "https://www.discogs.com/release/235913-Beck-Odelay",
+        "labels": [
+          {
+            "name": "Bong Load Custom Records",
+            "catno": "BL30"
+          }
+        ],
+        "formats": [
+          {
+            "name": "Vinyl",
+            "qty": "1",
+            "descriptions": [
+              "LP",
+              "Album",
+              "Limited Edition"
+            ],
+            "text": "180 gram"
+          }
+        ],
+        "images": [
+          {
+            "type": "primary",
+            "uri": "https://i.discogs.com/_gHjzOD8KKleaEE-zURsand7I9qmMWYnVb7k43d3xQM/rs:fit/g:sm/q:90/h:597/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTIzNTkx/My0xMzU5Mzk3Nzk4/LTk3MTguanBlZw.jpeg"
+          }
+        ]
+      }
+    },
+    {
+      "id": 22884872,
+      "title": "Beck!* - Odelay",
+      "year": "1996",
+      "country": "US",
+      "label": [
+        "Bong Load Custom Records",
+        "Bong Load Custom Records"
+      ],
+      "format": [
+        "Vinyl",
+        "LP",
+        "Album"
+      ],
+      "uri": "/release/22884872-Beck-Odelay",
+      "thumb": "",
+      "cover_image": "",
+      "release": {
+        "title": "Odelay",
+        "year": 1996,
+        "country": "US",
+        "num_for_sale": 1,
+        "lowest_price": 84.55,
+        "uri": "https://www.discogs.com/release/22884872-Beck-Odelay",
+        "labels": [
+          {
+            "name": "Bong Load Custom Records",
+            "catno": "BL30"
+          }
+        ],
+        "formats": [
+          {
+            "name": "Vinyl",
+            "qty": "1",
+            "descriptions": [
+              "LP",
+              "Album"
+            ]
+          }
+        ],
+        "images": [
+          {
+            "type": "secondary",
+            "uri": "https://i.discogs.com/OKIqzEsSQmSqg1nyfJ2oKScD3peY0vRYPgg8vhlzfbQ/rs:fit/g:sm/q:90/h:581/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTIyODg0/ODcyLTE2NTAxMzM4/ODAtODQ3Ni5qcGVn.jpeg"
+          }
+        ]
+      }
+    },
+    {
+      "id": 99999999,
+      "title": "Beck - Odelay (Test Pressing)*",
+      "year": "1996",
+      "country": "US",
+      "label": [
+        "Bong Load Custom Records"
+      ],
+      "format": [
+        "Vinyl",
+        "LP",
+        "Album"
+      ],
+      "uri": "/release/99999999-Beck-Odelay-Test-Pressing",
+      "thumb": "",
+      "cover_image": "",
+      "release": {
+        "title": "Odelay (Test Pressing)",
+        "year": 1996,
+        "country": "US",
+        "num_for_sale": 0,
+        "lowest_price": null,
+        "uri": "https://www.discogs.com/release/99999999-Beck-Odelay-Test-Pressing",
+        "labels": [
+          {
+            "name": "Bong Load Custom Records",
+            "catno": "BL30-TEST"
+          }
+        ],
+        "formats": [
+          {
+            "name": "Vinyl",
+            "qty": "1",
+            "descriptions": [
+              "LP",
+              "Album"
+            ]
+          }
+        ],
+        "images": []
+      }
+    },
+    {
+      "id": 88888888,
+      "title": "Beck (2) - Odelay",
+      "year": "2005",
+      "country": "Japan",
+      "label": [
+        "Geffen Records"
+      ],
+      "format": [
+        "Vinyl",
+        "LP",
+        "Album"
+      ],
+      "uri": "/release/88888888-Beck-Odelay",
+      "thumb": "",
+      "cover_image": "https://i.discogs.com/fake-cover-88888888.jpeg",
+      "release": {
+        "title": "Odelay",
+        "year": 2005,
+        "country": "Japan",
+        "num_for_sale": 2,
+        "lowest_price": 0,
+        "uri": "https://www.discogs.com/release/88888888-Beck-Odelay",
+        "labels": [
+          {
+            "name": "Geffen Records",
+            "catno": "GEF-2005"
+          }
+        ],
+        "formats": [
+          {
+            "name": "Vinyl",
+            "qty": "1",
+            "descriptions": [
+              "LP",
+              "Album"
+            ]
+          }
+        ],
+        "images": []
+      }
+    }
+  ]
+}

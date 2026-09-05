@@ -12,6 +12,26 @@ public JSON search (autolist.com/search — the endpoint its own SPA
 calls; CarGurus-owned, so its rows are CarGurus dealer inventory):
 free-text `keywords`, config zip/radius_mi/condition, 50 rows a page.
 Verified live from this network on 2026-09-02.
+
+discogs_api is also keyless: Discogs' marketplace *pages* are
+Cloudflare-walled, but api.discogs.com is open anonymously. One search
+call (GET /database/search, free-text `q=` plus config["format"],
+default "vinyl") followed by up to config["max_releases"] (default 8)
+GET /releases/{id} lookups — several calls under one seam, like
+fetch_kroger_api — paced >= 0.3s apart per Discogs' ~25 req/min
+anonymous rate limit; a 429 from either call raises
+FetchError("discogs: rate limited"). config["skip_reissues"] (default
+True) drops search rows whose format[] carries Reissue/Unofficial
+Release/Repress before spending the lookup budget, so it goes to
+original pressings first (falls back to the unfiltered list if that
+would leave nothing). config["currency"] (default "USD") is passed as
+`curr_abbr` on each release call. Returns one JSON body — not a raw
+Discogs response — shaped {"query", "releases": [...]}, each entry the
+search result merged with a "release" key holding that id's
+/releases/{id} body; parse.py's _parse_discogs_api reads this shape,
+not Discogs' own. Verified live from this network on 2026-09-04
+("beck odelay" surfaces release 235913, the 1996 US Bong Load
+pressing, with ~65 copies for sale).
 Credentials: EBAY_CLIENT_ID + EBAY_CLIENT_SECRET (eBay Browse API,
 client-credentials OAuth), BESTBUY_API_KEY (Best Buy Products API),
 WALMART_API_KEY (Walmart affiliate API — best-effort: Walmart's
@@ -32,6 +52,8 @@ package holds no Kroger credentials.
 import base64
 import json
 import os
+import re
+import time
 import urllib.parse
 
 from . import fetch
@@ -206,6 +228,93 @@ def fetch_kroger_api(config: dict, query: str) -> tuple[str, str]:
     return fetch._get(url, headers=headers), url
 
 
+_DISCOGS_SEARCH_URL = "https://api.discogs.com/database/search"
+_DISCOGS_UA = "product-finder/0.1 +https://github.com/chrismeyersfsu/product-finder"
+# Discogs' ~25 req/min unauthenticated limit: keep every call at least
+# this far apart, including the gap after the one search call.
+_DISCOGS_MIN_SPACING = 0.3
+# Search rows carrying any of these in format[] are a reissue/bootleg/
+# repress rather than an original pressing.
+_DISCOGS_SKIP_FORMATS = {"reissue", "unofficial release", "repress"}
+# Trailing words dropped from the free-text query since format=vinyl
+# (or whatever config["format"] is) already scopes the search.
+_DISCOGS_NOISE_WORDS = {"vinyl", "lp", "record", "records"}
+_DISCOGS_ARTIST_DISAMBIG_RE = re.compile(r"\s*\(\d+\)\s*$")
+
+
+def _discogs_clean_query(query: str) -> str:
+    """Strip trailing noise words ("... vinyl", "... lp") one at a time
+    so "Beck Odelay vinyl lp" -> "Beck Odelay"; never empties the query."""
+    words = query.split()
+    while len(words) > 1 and words[-1].strip(",.!").lower() in _DISCOGS_NOISE_WORDS:
+        words.pop()
+    return " ".join(words) if words else query
+
+
+def _discogs_is_reissue(formats: list) -> bool:
+    descs = {str(f).strip().lower() for f in formats or []}
+    return bool(descs & _DISCOGS_SKIP_FORMATS)
+
+
+def _discogs_get(url: str) -> str:
+    try:
+        return fetch._get(url, headers={"User-Agent": _DISCOGS_UA})
+    except fetch.FetchError as e:
+        if "429" in str(e):
+            raise fetch.FetchError("discogs: rate limited") from e
+        raise
+
+
+def fetch_discogs_api(config: dict, query: str) -> tuple[str, str]:
+    """Discogs' public database API: keyless. One search call, then up
+    to config["max_releases"] per-release lookups behind the same seam
+    (see the module docstring for the full shape/rate-limit contract).
+    Every HTTP call — including the search — is followed by a >= 0.3s
+    sleep before the next one, so the whole fetch stays under Discogs'
+    ~25/min anonymous limit regardless of how many releases are looked
+    up."""
+    fmt = config.get("format", "vinyl")
+    max_releases = config.get("max_releases", 8)
+    skip_reissues = config.get("skip_reissues", True)
+    currency = config.get("currency", "USD")
+
+    q = _discogs_clean_query(query)
+    search_url = (
+        f"{_DISCOGS_SEARCH_URL}?q={urllib.parse.quote_plus(q)}"
+        f"&format={urllib.parse.quote_plus(fmt)}&per_page=25"
+    )
+    search_body = _discogs_get(search_url)
+    time.sleep(_DISCOGS_MIN_SPACING)
+    try:
+        results = json.loads(search_body).get("results") or []
+    except ValueError:
+        results = []
+
+    if skip_reissues:
+        originals = [r for r in results if not _discogs_is_reissue(r.get("format") or [])]
+        results = originals or results  # an all-reissue query still gets something
+
+    releases = []
+    for i, r in enumerate(results[:max_releases]):
+        release_id = r.get("id")
+        if not release_id:
+            continue
+        if i:
+            time.sleep(_DISCOGS_MIN_SPACING)
+        release_url = f"https://api.discogs.com/releases/{release_id}?curr_abbr={currency}"
+        try:
+            release_body = _discogs_get(release_url)
+        except fetch.FetchError:
+            continue  # one bad pressing lookup shouldn't sink the whole search
+        try:
+            release = json.loads(release_body)
+        except ValueError:
+            continue
+        releases.append({**r, "release": release})
+
+    return json.dumps({"query": q, "releases": releases}), search_url
+
+
 FETCHERS = {
     "ebay_api": fetch_ebay_api,
     "bestbuy_api": fetch_bestbuy_api,
@@ -213,4 +322,5 @@ FETCHERS = {
     "goodwill_api": fetch_goodwill_api,
     "kroger_api": fetch_kroger_api,
     "autolist_api": fetch_autolist_api,
+    "discogs_api": fetch_discogs_api,
 }

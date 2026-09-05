@@ -1,0 +1,127 @@
+{
+  "pagination": {
+    "page": 1,
+    "pages": 2,
+    "per_page": 25,
+    "items": 30,
+    "urls": {
+      "last": "https://api.discogs.com/database/search?q=beck+odelay&format=vinyl&per_page=25&page=2",
+      "next": "https://api.discogs.com/database/search?q=beck+odelay&format=vinyl&per_page=25&page=2"
+    }
+  },
+  "results": [
+    {
+      "id": 235913,
+      "title": "Beck!* - Odelay",
+      "year": "1996",
+      "country": "US",
+      "label": [
+        "Bong Load Custom Records",
+        "Bong Load Custom Records"
+      ],
+      "format": [
+        "Vinyl",
+        "LP",
+        "Album",
+        "Limited Edition"
+      ],
+      "uri": "/release/235913-Beck-Odelay",
+      "thumb": "https://i.discogs.com/fake-thumb-235913.jpeg",
+      "cover_image": ""
+    },
+    {
+      "id": 22884872,
+      "title": "Beck!* - Odelay",
+      "year": "1996",
+      "country": "US",
+      "label": [
+        "Bong Load Custom Records",
+        "Bong Load Custom Records"
+      ],
+      "format": [
+        "Vinyl",
+        "LP",
+        "Album"
+      ],
+      "uri": "/release/22884872-Beck-Odelay",
+      "thumb": "",
+      "cover_image": ""
+    },
+    {
+      "id": 9168171,
+      "title": "Beck - Odelay",
+      "year": "2016",
+      "country": "US",
+      "label": [
+        "DGC",
+        "Vinyl Me, Please. Record Of The Month"
+      ],
+      "format": [
+        "Vinyl",
+        "LP",
+        "Album",
+        "Club Edition",
+        "Reissue"
+      ],
+      "uri": "/release/9168171-Beck-Odelay",
+      "thumb": "",
+      "cover_image": ""
+    },
+    {
+      "id": 5575820,
+      "title": "Beck - Odelay",
+      "year": "2014",
+      "country": "Europe",
+      "label": [
+        "Bong Load Records"
+      ],
+      "format": [
+        "Vinyl",
+        "LP",
+        "Album",
+        "Unofficial Release"
+      ],
+      "uri": "/release/5575820-Beck-Odelay",
+      "thumb": "",
+      "cover_image": ""
+    },
+    {
+      "id": 6740916,
+      "title": "Beck - Odelay",
+      "year": null,
+      "country": "Europe",
+      "label": [
+        "Bong Load Records",
+        "Bong Load Records"
+      ],
+      "format": [
+        "Vinyl",
+        "LP",
+        "Album",
+        "Unofficial Release"
+      ],
+      "uri": "/release/6740916-Beck-Odelay",
+      "thumb": "",
+      "cover_image": ""
+    },
+    {
+      "id": 30072583,
+      "title": "Beck!* - Odelay",
+      "year": null,
+      "country": "US",
+      "label": [
+        "DGC",
+        "Universal Music"
+      ],
+      "format": [
+        "Vinyl",
+        "LP",
+        "Album",
+        "Reissue"
+      ],
+      "uri": "/release/30072583-Beck-Odelay",
+      "thumb": "",
+      "cover_image": ""
+    }
+  ]
+}

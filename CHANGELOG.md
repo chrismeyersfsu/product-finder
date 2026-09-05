@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.0 — 2026-09-04
+
+- Discogs (keyless API) as a site: one listing per pressing with
+  copies for sale, priced at the cheapest copy, linking to the Discogs
+  sell page.
+
 ## 0.21.0 — 2026-09-04
 
 - Monitor page (`/monitor`): the hourly sync's live progress (bar plus
