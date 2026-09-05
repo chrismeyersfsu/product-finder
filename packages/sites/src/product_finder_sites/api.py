@@ -424,15 +424,45 @@ def _fb_retryable(exc: fetch.FetchError) -> bool:
     return status == 429 or 500 <= status < 600
 
 
+# Wall-clock of the last request sent to facebook.com, so consecutive
+# queries (two requests each) never exceed ~1 request/second across the
+# whole run — a burst of four back-to-back queries earned a GraphQL
+# "Rate limit exceeded" soft error in testing.
+_FB_MIN_INTERVAL_S = 1.0
+_fb_last_request_at = 0.0
+
+# GraphQL answers a rate limit as a 200 with this in errors[].message;
+# retried with backoff here rather than handed to the browser tier, which
+# would send ~86 more requests to the host that just throttled us.
+_FB_RATE_LIMIT_MARK = "Rate limit exceeded"
+
+
+def _fb_pace() -> None:
+    global _fb_last_request_at
+    wait = _FB_MIN_INTERVAL_S - (time.monotonic() - _fb_last_request_at)
+    if wait > 0:
+        _sleep(wait)
+    _fb_last_request_at = time.monotonic()
+
+
+def _fb_post_graphql(form: str, headers: dict) -> str:
+    body = fetch._post(_FB_GRAPHQL_URL, data=form, headers=headers, timeout=20.0)
+    if _FB_RATE_LIMIT_MARK in body[:2000]:
+        raise fetch.FetchError("rate limited")
+    return body
+
+
 def _call_with_retries(fn, *args, max_attempts: int = _FB_MAX_ATTEMPTS, **kwargs):
     """Calls fn(*args, **kwargs), retrying per the policy in the module
-    docstring. Every attempt beyond the first sleeps via the _sleep seam
-    first. A non-retryable FetchError (a 4xx other than 429) or the
-    max_attempts'th failure propagates as-is."""
+    docstring. Every attempt is paced by _fb_pace and every attempt beyond
+    the first sleeps via the _sleep seam first. A non-retryable FetchError
+    (a 4xx other than 429) or the max_attempts'th failure propagates
+    as-is."""
     attempt = 0
     while True:
         attempt += 1
         try:
+            _fb_pace()
             return fn(*args, **kwargs)
         except fetch.FetchError as e:
             if not _fb_retryable(e) or attempt >= max_attempts:
@@ -566,9 +596,7 @@ def _fetch_facebook_json(config: dict, query: str) -> tuple[str, str]:
         raise fetch.FetchError("facebook_json: no session token (lsd) in search document")
     form = _fb_graphql_form_body(query, None, session)  # cursor=None: page 0, see module docstring
     headers = _fb_graphql_headers(session)
-    graphql_body = _call_with_retries(
-        fetch._post, _FB_GRAPHQL_URL, data=form, headers=headers, timeout=20.0
-    )
+    graphql_body = _call_with_retries(_fb_post_graphql, form, headers)
     return graphql_body, doc_url
 
 

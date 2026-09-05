@@ -259,3 +259,31 @@ def test_search_site_falls_back_to_browser_tier_when_json_fails(monkeypatch):
 
 def test_json_tier_label_is_json():
     assert run._label("facebook_json") == "json"
+
+
+def test_graphql_rate_limit_soft_error_is_retried(monkeypatch):
+    calls = {"n": 0}
+
+    def throttled_post(url, data, headers=None, timeout=25.0):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return '{"errors":[{"message":"Rate limit exceeded"}],"data":null}'
+        return _graphql()
+
+    monkeypatch.setattr(fetch, "_get", lambda url, headers=None, timeout=25.0: _doc())
+    monkeypatch.setattr(fetch, "_post", throttled_post)
+    body, _page_url = api.fetch_facebook_json(FB_JSON_CONFIG, "x")
+    assert calls["n"] == 2
+    assert json.loads(body)["data"]["marketplace_search"]["feed_units"]["edges"]
+
+
+def test_requests_are_paced_to_one_per_second(monkeypatch):
+    slept = []
+    monkeypatch.setattr(api, "_sleep", slept.append)
+    monkeypatch.setattr(api, "_fb_last_request_at", 0.0)
+    monkeypatch.setattr(fetch, "_get", lambda url, headers=None, timeout=25.0: _doc())
+    monkeypatch.setattr(fetch, "_post", lambda url, data, headers=None, timeout=25.0: _graphql())
+    api.fetch_facebook_json(FB_JSON_CONFIG, "x")  # GET then POST, back to back
+    api.fetch_facebook_json(FB_JSON_CONFIG, "y")
+    # first request is free; every later one waits out the 1s interval
+    assert len(slept) == 3 and all(0 < s <= api._FB_MIN_INTERVAL_S for s in slept)
