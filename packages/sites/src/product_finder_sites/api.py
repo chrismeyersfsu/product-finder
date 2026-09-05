@@ -66,8 +66,9 @@ slower than the browser fallback it was meant to avoid — reverted.
 Pagination (page 2+) still needs the GraphQL POST and session harvest;
 that machinery is proto 6's `_harvest_session`/`_fetch_graphql_page`
 and is deliberately not ported here — a later pass. A login wall in
-the document is checked before returning, so a wall costs exactly one
-request and raises immediately (never retried — see
+the document (a marker with no `feed_units` beside it — a page that
+carries the feed is results, whatever else it shows) is checked before
+returning, so a wall costs exactly one request and raises immediately (never retried — see
 BROWSER_KINDS/_TIER_LABEL in run.py for how that degrades to the
 browser tier). Requests are paced to ~1/second (`_fb_pace`, module-level
 `_fb_last_request_at`) and retried on transport failures and 429/5xx
@@ -435,7 +436,13 @@ def _fetch_facebook_json(config: dict, query: str) -> tuple[str, str]:
         region=region, query=urllib.parse.quote_plus(query), radius_km=radius_km
     )
     doc_body = _call_with_retries(fetch._get, doc_url, headers=config.get("headers"), timeout=20.0)
-    if any(mark in doc_body for mark in _FB_LOGIN_MARKERS):
+    # Results first, wall second: a document that carries the feed is a
+    # results page even if a login prompt sits beside it, so only a
+    # feed-less document that shows a marker is a wall (the bake-off's
+    # one finding that never made a ballot — the winner already read it
+    # this way; the five losers would silently report walls on such a
+    # page). In every capture so far the two never co-occur.
+    if "feed_units" not in doc_body and any(mark in doc_body for mark in _FB_LOGIN_MARKERS):
         raise fetch.FetchError("login wall")
     return doc_body, doc_url
 

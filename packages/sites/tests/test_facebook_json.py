@@ -243,3 +243,14 @@ def test_requests_are_paced_to_one_per_second(monkeypatch):
     api.fetch_facebook_json(FB_JSON_CONFIG, "y")  # one more GET, back to back
     # first request is free; the second (only) later one waits out the 1s interval
     assert len(slept) == 1 and 0 < slept[0] <= api._FB_MIN_INTERVAL_S
+
+
+def test_login_prompt_beside_results_is_not_a_wall(monkeypatch):
+    """A document that carries the feed is a results page even if it also
+    shows a login prompt — only a feed-less document with a marker is a
+    wall. Guards the ordering the bake-off found latent in five of six
+    prototypes."""
+    doc = _doc() + '<form id="login_form" action="/login/"></form>'
+    monkeypatch.setattr(api.fetch, "_get", lambda url, headers=None, timeout=25.0: doc)
+    body, _ = api.fetch_facebook_json(FB_JSON_CONFIG, "bandaid")
+    assert "feed_units" in body
