@@ -16,3 +16,13 @@ export const windowLabel = (days: number): string =>
  * decimals so per-ounce prices don't all round to $0.15. */
 export const perUnit = (v: number | null | undefined, unit: string | null | undefined): string =>
   v == null || !unit ? "—" : `$${v.toFixed(v < 1 ? 3 : 2)}/${unit}`;
+/** "1m 12s" / "21m" / "45s" — compact duration from a count of seconds,
+ * for the Monitor page's run progress and durations. */
+export const duration = (totalSeconds: number): string => {
+  const s = Math.max(0, Math.round(totalSeconds));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  if (m === 0) return `${rem}s`;
+  if (rem === 0) return `${m}m`;
+  return `${m}m ${rem}s`;
+};

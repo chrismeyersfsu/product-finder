@@ -12,17 +12,47 @@
  * any fs error; scrapeStatus/scrapeStatuses never throwing either,
  * yielding the "nothing going on" shape instead; and a `running`
  * marker older than 50 minutes being treated as stale and ignored
- * (the host job died without cleaning up). Server-side only.
+ * (the host job died without cleaning up). baseDir, RUNNING_STALE_MS,
+ * and listDir are exported so monitor.ts can build the Monitor page's
+ * ordered on-demand queue from the same three directories without
+ * duplicating the path/slug/staleness rules. Server-side only.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { dbPath, SLUG_RE } from "./products";
 
-const RUNNING_STALE_MS = 50 * 60 * 1000;
+export const RUNNING_STALE_MS = 50 * 60 * 1000;
 
-function baseDir(): string | null {
+const ENTRY_RE = /^[a-z0-9-]+$/;
+
+export function baseDir(): string | null {
   const file = dbPath();
   return file ? path.join(path.dirname(file), "scrape-now") : null;
+}
+
+export interface DirEntry {
+  slug: string;
+  mtimeMs: number;
+}
+
+/** Every valid-looking slug in one scrape-now subdir (queue/running/
+ * done), with its mtime — the moment it was queued, started running,
+ * or finished, respectively. Dotfiles and anything not matching the
+ * slug shape scrape.py uses are skipped (same junk-filename rule as
+ * the Python side); an empty list when the dir or the db don't exist.
+ * Unsorted — callers order by mtime for their own purpose (oldest
+ * first for the queue, newest first for done). */
+export function listDir(sub: "queue" | "running" | "done"): DirEntry[] {
+  const base = baseDir();
+  if (!base) return [];
+  try {
+    return fs
+      .readdirSync(path.join(base, sub))
+      .filter((name) => ENTRY_RE.test(name))
+      .map((slug) => ({ slug, mtimeMs: fs.statSync(path.join(base, sub, slug)).mtimeMs }));
+  } catch {
+    return [];
+  }
 }
 
 /** Drops an empty file at queue/<slug>, requesting an out-of-band

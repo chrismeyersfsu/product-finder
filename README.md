@@ -235,6 +235,13 @@ queue files described under Deployment):
   `add_product` MCP tool writes.
 - **Sites** (`/sites`) — which scrapers are actually working, with the
   strategy that ran and the last error.
+- **Monitor** (`/monitor`) — the hourly sync's live progress (a
+  progress bar and a per-product table: done / running / pending, with
+  each product's stored/error counts and timing) plus the on-demand
+  "scrape now" queue as one ordered list (running, then queued in
+  order, then recently finished). `?product=<slug>` highlights that
+  product's row and estimates how many minutes out its turn is. Only
+  auto-refreshes while a run or a queued request is actually active.
 
 Run it locally (`cd ui && npm install && npm run dev`, then
 http://localhost:4321, `PF_DB` to point at a db elsewhere) or in the
@@ -264,7 +271,10 @@ What it sets up:
 - `product-finder-scrape.timer` + `.container` — hourly oneshot from
   the same browser image scraping every product (missed ticks fire on
   wake; `journalctl --user -u product-finder-scrape` shows the per-site
-  summary; the run exits non-zero only when every site errored).
+  summary; the run exits non-zero only when every site errored). Live
+  progress (planned order, which product is running now, per-product
+  results as they land) is written to `data/scrape-now/state/hourly.json`
+  after every product, which the dashboard's **Monitor** page reads.
 - `product-finder-scrape-now.path` + `.container` — on-demand scrapes.
   The dashboard's **Scrape now** button (and every newly created
   product) drops an empty file `data/scrape-now/queue/<slug>`; the
@@ -272,7 +282,9 @@ What it sets up:
   to `running/<slug>` while it scrapes just that product and leaves a
   one-line summary in `done/<slug>` when finished (the product page
   shows all three states). `touch data/scrape-now/queue/<slug>` does
-  the same from a shell.
+  the same from a shell. This mode's own live progress is written to
+  `data/scrape-now/state/requested.json`, same shape as the hourly
+  state file (see `scrape.py`'s module docstring for the exact JSON).
 - `product-finder-tunnel.service` — cloudflared serving
   https://product-finder.judicialschedule.com (config in
   `~/.cloudflared/product-finder.yml`; the installer writes it and the

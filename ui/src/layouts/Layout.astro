@@ -2,10 +2,12 @@
 /** Page shell: nav, theme tokens, and the shared tooltip layer.
  * The tooltip layer is delegated: any element with data-tip-value /
  * data-tip-label gets a hover+focus tooltip; content is inserted with
- * textContent only (labels are untrusted data). */
+ * textContent only (labels are untrusted data). `refreshSeconds` is an
+ * opt-in <meta http-equiv="refresh">, for pages (Monitor) that only
+ * want it while something's actively happening. */
 import "../styles/global.css";
-interface Props { title: string; active: string; product?: string | undefined }
-const { title, active, product } = Astro.props;
+interface Props { title: string; active: string; product?: string | undefined; refreshSeconds?: number | undefined }
+const { title, active, product, refreshSeconds } = Astro.props;
 const q = product ? `?product=${encodeURIComponent(product)}` : "";
 const tabs = [
   ["/", "Deals", "deals"],
@@ -14,12 +16,14 @@ const tabs = [
   ["/backtests", "Backtests", "backtests"],
   ["/sites", "Sites", "sites"],
   ["/products", "Products", "products"],
+  ["/monitor", "Monitor", "monitor"],
 ];
 ---
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {refreshSeconds != null && <meta http-equiv="refresh" content={String(refreshSeconds)} />}
     <title>{title} · product-finder</title>
   </head>
   <body>
@@ -28,7 +32,7 @@ const tabs = [
         <h1>product-finder</h1>
         <nav>
           {tabs.map(([href, label, key]) => (
-            <a href={`${href}${key === "backtests" || key === "sites" || key === "products" ? "" : q}`} aria-current={active === key ? "page" : undefined}>{label}</a>
+            <a href={`${href}${key === "backtests" || key === "sites" || key === "products" || key === "monitor" ? "" : q}`} aria-current={active === key ? "page" : undefined}>{label}</a>
           ))}
         </nav>
       </header>

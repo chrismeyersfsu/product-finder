@@ -1,0 +1,183 @@
+---
+/** Monitor: hourly-sync run progress plus the on-demand scrape-now
+ * queue, from the state files scrape.py writes and the queue/running/
+ * done dirs scrapeQueue.ts already reads (see src/lib/monitor.ts for
+ * the contract). `?product=<slug>` (the global product filter)
+ * highlights that product's row in the hourly table and estimates how
+ * far away its turn is. Auto-refreshes every 15s only while the
+ * hourly run is active or the on-demand queue has something running
+ * or waiting — a page with nothing happening doesn't reload itself.
+ */
+export const prerender = false;
+import EmptyState from "../components/EmptyState.astro";
+import Layout from "../layouts/Layout.astro";
+import * as db from "../lib/db";
+import { duration, hhmm } from "../lib/format";
+import {
+  isActive,
+  nextHourlyRun,
+  onDemandQueue,
+  productProgress,
+  readState,
+  runStatus,
+  secondsSince,
+} from "../lib/monitor";
+
+const now = new Date();
+const productSlug = Astro.url.searchParams.get("product") || "";
+const hourly = readState("hourly");
+const queue = onDemandQueue(now);
+const refreshing = isActive(hourly, queue, now);
+
+const products = db.listProducts();
+const productName = (slug: string) => products.find((p) => p.slug === slug)?.name ?? slug;
+
+const hStatus = runStatus(hourly, now);
+const doneCount = hourly ? Object.keys(hourly.results).length : 0;
+const plannedCount = hourly?.products.length ?? 0;
+const pct = plannedCount ? Math.round((doneCount / plannedCount) * 100) : 0;
+const currentSeconds = hourly?.current_started_at ? secondsSince(hourly.current_started_at, now) : null;
+const next = nextHourlyRun(now);
+
+function hourlyLine(): string {
+  if (!hourly || hStatus === "never") return `Never run yet; next run ${hhmm(next.toISOString())}.`;
+  if (hStatus === "running") {
+    const on = hourly.current ? `, on ${hourly.current} for ${duration(currentSeconds ?? 0)}` : "";
+    return `Running — ${doneCount} of ${plannedCount} products${on}, started ${hhmm(hourly.started_at)}`;
+  }
+  if (hStatus === "finished") {
+    const dur =
+      hourly.finished_at != null
+        ? duration((Date.parse(hourly.finished_at) - Date.parse(hourly.started_at)) / 1000)
+        : "?";
+    const failed = hourly.exit === 1 ? " (total failure)" : "";
+    return `Finished ${hhmm(hourly.finished_at!)} in ${dur}${failed}; next run ${hhmm(next.toISOString())}`;
+  }
+  // died
+  return `Died — started ${hhmm(hourly.started_at)}, stuck on ${hourly.current ?? "?"}; next run ${hhmm(next.toISOString())}`;
+}
+
+const highlighted = productSlug ? productProgress(hourly, productSlug) : null;
+
+function highlightLine(): string | null {
+  if (!productSlug) return null;
+  const name = productName(productSlug);
+  if (!highlighted) return `"${name}" isn't part of this run.`;
+  if (highlighted.phase === "done") return `Your product ("${name}") already finished this run — was #${highlighted.position} of ${highlighted.total}.`;
+  if (highlighted.phase === "current") return `Your product ("${name}") is being scraped right now — #${highlighted.position} of ${highlighted.total}.`;
+  const eta = highlighted.etaSeconds != null ? `, about ${duration(highlighted.etaSeconds)} away` : "";
+  return `Your product is #${highlighted.position} of ${highlighted.total}${eta}.`;
+}
+const highlightText = highlightLine();
+
+const queueActiveCount = queue.filter((q) => q.kind !== "done").length;
+---
+<Layout title="Monitor" active="monitor" product={productSlug || undefined} refreshSeconds={refreshing ? 15 : undefined}>
+  {!db.hasDb() && <EmptyState what="database" tool="seed_defaults" />}
+
+  <div class="card">
+    <h2>
+      Hourly sync
+      <span class="sub">— {hourlyLine()}{refreshing && hStatus === "running" ? " · auto-refreshing" : ""}</span>
+    </h2>
+
+    {hourly && (
+      <div
+        class="progress"
+        role="progressbar"
+        aria-valuenow={doneCount}
+        aria-valuemin={0}
+        aria-valuemax={plannedCount || 1}
+      >
+        <div
+          class:list={["progress-bar", { died: hStatus === "died" }]}
+          style={`width:${pct}%`}
+        ></div>
+      </div>
+    )}
+
+    {highlightText && <p class="callout">{highlightText}</p>}
+
+    {hourly ? (
+      <div class="wrap-x">
+        <table class="data cards" data-sortable>
+          <thead>
+            <tr>
+              <th class="num">#</th><th>Product</th><th>Status</th><th>Result</th><th class="num">Seconds</th>
+            </tr>
+          </thead>
+          <tbody>
+            {hourly.products.map((slug, i) => {
+              const result = hourly.results[slug];
+              const isCurrent = hourly.current === slug;
+              return (
+                <tr class:list={{ highlight: slug === productSlug }}>
+                  <td class="num" data-label="#">{i + 1}</td>
+                  <td class="c-title" data-label="Product">
+                    <a href={`/products/${encodeURIComponent(slug)}`}>{productName(slug)}</a>
+                  </td>
+                  <td data-label="Status">
+                    {result ? (
+                      <span class="status status-good"><span class="ic">✓</span>done</span>
+                    ) : isCurrent ? (
+                      <span class="status status-warning"><span class="ic pulse">●</span>running…</span>
+                    ) : (
+                      <span class="status status-muted"><span class="ic">○</span>pending</span>
+                    )}
+                  </td>
+                  <td class="c-wide" data-label="Result">{result ? result.line : "—"}</td>
+                  <td class="num" data-label="Seconds">{result ? result.seconds.toFixed(1) : "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <p class="caveats">No hourly run recorded yet — product-finder-scrape.timer runs it at the top of every hour.</p>
+    )}
+  </div>
+
+  <div class="card">
+    <h2>
+      On-demand queue
+      <span class="sub">
+        — {queue.length === 0 ? "nothing queued and nothing running" : `${queueActiveCount} active, ${queue.length - queueActiveCount} recently done`}
+        {refreshing && queueActiveCount > 0 ? " · auto-refreshing" : ""}
+      </span>
+    </h2>
+
+    {queue.length === 0 ? (
+      <p class="caveats">Use "Scrape now" on a product's page to request an out-of-band scrape; it'll show up here.</p>
+    ) : (
+      <div class="wrap-x">
+        <table class="data cards" data-sortable>
+          <thead>
+            <tr><th class="num">#</th><th>Product</th><th>Status</th><th>Since</th><th>Result</th></tr>
+          </thead>
+          <tbody>
+            {queue.map((item) => (
+              <tr class:list={{ highlight: item.slug === productSlug }}>
+                <td class="num" data-label="#">{item.position ?? "—"}</td>
+                <td class="c-title" data-label="Product">
+                  <a href={`/products/${encodeURIComponent(item.slug)}`}>{productName(item.slug)}</a>
+                </td>
+                <td data-label="Status">
+                  {item.kind === "running" ? (
+                    <span class="status status-warning"><span class="ic pulse">●</span>running</span>
+                  ) : item.kind === "queued" ? (
+                    <span class="status status-muted"><span class="ic">○</span>queued</span>
+                  ) : (
+                    <span class="status status-good"><span class="ic">✓</span>done</span>
+                  )}
+                </td>
+                <td class="c-minor" data-label="Since">{hhmm(item.since)}</td>
+                <td class="c-wide" data-label="Result">{item.doneLine ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</Layout>
