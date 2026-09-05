@@ -6,6 +6,11 @@
   query, ~1 s; page 1 is read from the feed embedded in the page) with
   the headless browser kept as a fallback tier. Requests are paced to
   one per second.
+- Browser-rendered sites wait for their marker element to be present
+  rather than visible. Carvana's marker is a `<script>`, which is never
+  visible, so every Carvana query had been running out a 10 s timeout
+  before returning; a car product now takes ~5 s on Carvana instead
+  of ~37 s.
 
 ## 0.22.1 — 2026-09-05
 

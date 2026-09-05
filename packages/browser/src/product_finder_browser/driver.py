@@ -4,8 +4,9 @@ Owns browser lifecycle (launch, navigate, scroll-nudge, wait, teardown), cookie
 injection, and error normalization to FetchError. Never parses HTML
 and never selects sites. Callers rely on: get_page(url, wait_selector,
 timeout, cookies) returns the rendered page's HTML; wait_selector is
-best-effort (a wall page that never shows it still returns its
-content, so parsers — not timeouts — decide what the page was);
+best-effort and waits for the element to be *attached*, not visible (a
+wall page that never shows it still returns its content, so parsers —
+not timeouts — decide what the page was);
 cookies is an optional "k=v; k2=v2" header string injected into the
 browser context for the page's registrable domain and never persisted
 anywhere; wire() is idempotent and is the only supported way to enable
@@ -48,8 +49,13 @@ def _render(url: str, wait_selector: str | None, timeout: float, cookies: str | 
             except Exception:
                 pass
             if wait_selector:
+                # state="attached": we parse the DOM, we don't look at it, so
+                # presence is the signal. Playwright's default ("visible")
+                # never fires for <script> or other display:none targets
+                # (carvana's `script[data-testid=vehicle-ld]`), which
+                # silently turned every such query into a full 10 s wait.
                 try:
-                    page.wait_for_selector(wait_selector, timeout=10_000)
+                    page.wait_for_selector(wait_selector, timeout=10_000, state="attached")
                 except Exception:
                     pass  # best-effort: return whatever rendered
             return page.content()
