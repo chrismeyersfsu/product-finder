@@ -6,16 +6,28 @@
  * the submit is intercepted, posted with fetch, and the page reloads
  * in place (a pin/unpin moves the row between buckets, unlike Hide's
  * simple row removal, so there's no in-place DOM edit that makes
- * sense here). */
+ * sense here). The button is a pushpin icon (outline when unpinned,
+ * filled in --accent when pinned) rather than text; `title` +
+ * `aria-label` carry the accessible name. */
 interface Props { id: number; pinned: boolean; back: string }
 const { id, pinned, back } = Astro.props;
+const label = pinned ? "Unpin this listing" : "Pin this listing to the top";
 ---
 <form class="pin-form" method="post" action="/api/pin">
   <input type="hidden" name="id" value={id} />
   <input type="hidden" name="pinned" value={pinned ? "0" : "1"} />
   <input type="hidden" name="back" value={back} />
-  <button type="submit" class="btn-ghost" title={pinned ? "Unpin this listing" : "Pin this listing to the top"}>
-    {pinned ? "Unpin" : "Pin"}
+  <button type="submit" class="btn-ghost btn-icon" title={label} aria-label={label}>
+    <svg
+      width="18" height="18" viewBox="0 0 24 24"
+      fill={pinned ? "var(--accent)" : "none"}
+      stroke={pinned ? "var(--accent)" : "currentColor"}
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <line x1="12" x2="12" y1="17" y2="22"></line>
+      <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
+    </svg>
   </button>
 </form>
 <script>

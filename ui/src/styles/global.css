@@ -370,6 +370,33 @@ table.data[data-sortable] thead th:focus-visible { outline: 2px solid var(--acce
 .hide-form, .pin-form { display: inline; margin: 0; }
 .badge-new { border-color: var(--accent); color: var(--accent); margin-left: 6px; vertical-align: 1px; }
 
+/* Icon-only ghost button (PinButton's pushpin) */
+.btn-icon { display: inline-flex; align-items: center; justify-content: center; padding: 8px; line-height: 0; }
+.btn-icon svg { display: block; }
+@media (max-width: 720px) {
+  .btn-icon { min-width: 40px; min-height: 40px; }
+}
+
+/* iOS-Mail-style swipe-to-hide on results rows (SwipeRow.astro).
+ * `.swipe-panel` sits behind the row, revealed as `.swipe-content`
+ * (which carries the row's usual `.ui-li` layout) is dragged left. */
+.swipe-row { position: relative; overflow: hidden; touch-action: pan-y; }
+.swipe-panel {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 88px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--status-critical); color: #fff; font-size: 13px; font-weight: 700;
+  cursor: pointer; user-select: none;
+}
+.swipe-content { position: relative; background: var(--surface-1); transition: transform 0.18s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .swipe-content { transition: none; }
+}
+/* Touch devices rely on the swipe instead of the ghost Hide button —
+ * but only once JS (which drives the swipe) is confirmed present. */
+@media (hover: none) {
+  html.js .ui-li-aside .hide-form { display: none; }
+}
+
 /* Narrow screens: no sideways scrolling. Card tables (table.cards)
  * drop their header and lay each row out as a two-column card with
  * the listing title across the top, the row's action pinned top-right

@@ -1,0 +1,128 @@
+---
+/** Wraps one results-row's content in an iOS-Mail-style
+ * swipe-to-hide: a red "Hide" panel sits behind the row's right edge;
+ * dragging the slotted content left reveals it. It never renders its
+ * own hide control — a tap on the panel, or a long enough swipe on
+ * release, submits the row's *existing* `.hide-form` (HideButton's),
+ * found by walking up to the nearest `[data-swipe-row]` and back down
+ * — so there is exactly one hide control per row and
+ * `form.closest("tr, li")` in HideButton's own script still finds the
+ * enclosing `<li>` to remove.
+ *
+ * Engagement rule: a pointer gesture only becomes a swipe once it has
+ * moved more than 10px and is more horizontal than vertical; anything
+ * else (a tap, a vertical scroll) is left alone, and `touch-action:
+ * pan-y` on the wrapper keeps native vertical scrolling working. Once
+ * engaged, content is dragged with the pointer, clamped to [-88, 0];
+ * on release it snaps open past ~40px, snaps shut otherwise, or (past
+ * ~55% of the row's width, uncapped by the visual clamp) hides
+ * immediately. Only one row is open at a time — starting a drag
+ * elsewhere, or any pointerdown outside the open row, closes it. A
+ * click that follows a real drag is swallowed (capture-phase, once)
+ * so the title link underneath doesn't navigate.
+ *
+ * This is touch chrome: on hover-capable devices the ghost Hide
+ * button in `.ui-li-aside` stays visible instead (see global.css),
+ * and this component still renders (inert) so markup doesn't fork by
+ * input type. */
+---
+<div class="swipe-row" data-swipe-row>
+  <div class="swipe-panel" data-swipe-panel role="button" tabindex="-1" aria-hidden="true">Hide</div>
+  <div class="ui-li swipe-content" data-swipe-content>
+    <slot />
+  </div>
+</div>
+<script>
+  const OPEN_X = -88;
+  const DRAG_THRESHOLD = 10;
+  const OPEN_THRESHOLD = 40;
+  const COMMIT_RATIO = 0.55;
+
+  let openRow: HTMLElement | null = null;
+
+  function closeRow(row: HTMLElement) {
+    const content = row.querySelector<HTMLElement>("[data-swipe-content]");
+    if (content) content.style.transform = "";
+    row.dataset.open = "0";
+  }
+
+  function submitHide(row: HTMLElement) {
+    row.querySelector<HTMLFormElement>(".hide-form")?.requestSubmit();
+  }
+
+  document.addEventListener("pointerdown", (e) => {
+    const target = e.target as Element;
+    const row = target.closest<HTMLElement>("[data-swipe-row]");
+    if (openRow && openRow !== row) {
+      closeRow(openRow);
+      openRow = null;
+    }
+
+    const content = target.closest<HTMLElement>("[data-swipe-content]");
+    if (!content || !row) return; // not a drag start (e.g. a tap on the panel)
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const baseX = row.dataset.open === "1" ? OPEN_X : 0;
+    let engaged = false;
+    let dragged = false;
+    let dx = 0;
+    let rawDx = 0;
+
+    const onMove = (ev: PointerEvent) => {
+      const cx = ev.clientX - startX;
+      const cy = ev.clientY - startY;
+      if (!engaged) {
+        if (Math.abs(cx) > DRAG_THRESHOLD && Math.abs(cx) > Math.abs(cy)) engaged = true;
+        else return;
+      }
+      dragged = true;
+      rawDx = baseX + cx;
+      dx = Math.min(0, Math.max(OPEN_X, rawDx));
+      content.style.transition = "none";
+      content.style.transform = `translateX(${dx}px)`;
+    };
+
+    const onUp = () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onUp);
+      if (!engaged) return;
+      content.style.transition = "";
+      const width = row.getBoundingClientRect().width || 1;
+      if (Math.abs(rawDx) >= width * COMMIT_RATIO) {
+        submitHide(row);
+        openRow = null;
+      } else if (dx <= -OPEN_THRESHOLD) {
+        content.style.transform = `translateX(${OPEN_X}px)`;
+        row.dataset.open = "1";
+        openRow = row;
+      } else {
+        content.style.transform = "";
+        row.dataset.open = "0";
+        if (openRow === row) openRow = null;
+      }
+      if (dragged) {
+        content.addEventListener(
+          "click",
+          (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+          },
+          { capture: true, once: true }
+        );
+      }
+    };
+
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onUp);
+  });
+
+  document.querySelectorAll<HTMLElement>("[data-swipe-panel]").forEach((panel) => {
+    panel.addEventListener("click", () => {
+      const row = panel.closest<HTMLElement>("[data-swipe-row]");
+      if (row) submitHide(row);
+    });
+  });
+</script>

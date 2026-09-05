@@ -23,6 +23,9 @@
   hidden inside Filters.
 - Manage products page removed; saving or deleting a product returns
   to the product list.
+- Pin is a pushpin icon on results rows.
+- Swipe a results row left to hide it (iOS-style); the Hide button
+  remains on desktop.
 
 ## 0.22.1 — 2026-09-05
 

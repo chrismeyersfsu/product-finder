@@ -41,6 +41,13 @@ const NAV: { href: string; label: string; key: string }[] = [
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     {refreshSeconds != null && <meta http-equiv="refresh" content={String(refreshSeconds)} />}
     <title>{title} · product-finder</title>
+    {/* Runs synchronously, before body paint, so JS-only chrome (e.g. the
+       swipe-to-hide row on /deals/[slug]) can gate itself on html.js
+       without a flash — and everything stays reachable with JS off,
+       since nothing depends on this class existing. */}
+    <script is:inline>
+      document.documentElement.classList.add("js");
+    </script>
   </head>
   <body>
     <header class="jqm-header">

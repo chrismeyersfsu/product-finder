@@ -7,7 +7,12 @@
  * pinned listings render first, under a "Pinned" list-divider, then
  * the rest under an "All" divider — the same sort applies within each
  * bucket. Pinning is skipped entirely (no button, no dividers) on a db
- * that predates the pinned_at column (db.pinningAvailable()). Sort is
+ * that predates the pinned_at column (db.pinningAvailable()). Pin is a
+ * pushpin icon (PinButton); Hide is a ghost text button on
+ * hover-capable devices and an iOS-Mail-style left swipe on touch
+ * ones (SwipeRow wraps each row's content — see its own docstring —
+ * and drives the same `.hide-form` HideButton renders, so there is
+ * still exactly one hide control per row). Sort is
  * its own always-visible row above Filters — a one-field form that
  * carries every currently-active filter along as hidden inputs, so
  * changing sort never drops a filter. Filters itself is a collapsible,
@@ -32,6 +37,7 @@ import HideButton from "../../components/HideButton.astro";
 import Layout from "../../layouts/Layout.astro";
 import PinButton from "../../components/PinButton.astro";
 import SiteMultiSelect from "../../components/SiteMultiSelect.astro";
+import SwipeRow from "../../components/SwipeRow.astro";
 import { siteVar } from "../../lib/colors";
 import * as db from "../../lib/db";
 import { day, money, moneyCents, perUnit } from "../../lib/format";
@@ -224,7 +230,7 @@ const on = (key: string) => enabledFields.has(key);
             if (on("unit_price") && r.unit_price != null && r.unit) metaNodes.push(<span>{perUnit(r.unit_price, r.unit)}</span>);
             return (
               <li class:list={[{ "ui-li-has-thumb": on("thumbnail") }]}>
-                <div class="ui-li">
+                <SwipeRow>
                   {on("thumbnail") && (
                     r.image_url ? (
                       <img class="ui-li-thumb" src={r.image_url} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" />
@@ -257,7 +263,7 @@ const on = (key: string) => enabledFields.has(key);
                     {pinAvailable && <PinButton id={r.id} pinned={!!r.pinned_at} back={back} />}
                     <HideButton id={r.id} hidden={false} back={back} />
                   </div>
-                </div>
+                </SwipeRow>
               </li>
             );
           };
