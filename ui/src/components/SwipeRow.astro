@@ -1,44 +1,66 @@
 ---
-/** Wraps one results-row's content in an iOS-Mail-style
- * swipe-to-hide: a red "Hide" panel sits behind the row's right edge;
- * dragging the slotted content left reveals it. It never renders its
- * own hide control — a tap on the panel, or a long enough swipe on
- * release, submits the row's *existing* `.hide-form` (HideButton's),
- * found by walking up to the nearest `[data-swipe-row]` and back down
- * — so there is exactly one hide control per row and
- * `form.closest("tr, li")` in HideButton's own script still finds the
- * enclosing `<li>` to remove.
+/** Wraps one listview row's content in an iOS-Mail-style swipe: a
+ * panel of actions sits behind the row's right edge; dragging the
+ * slotted content left reveals it.
+ *
+ * Two shapes. With no `panel` slot (the results page), the panel is a
+ * single red "Hide" that never renders its own control — a tap on it,
+ * or a long enough swipe on release, submits the row's *existing*
+ * `.hide-form` (HideButton's), found by walking up to the nearest
+ * `[data-swipe-row]` and back down — so there is exactly one hide
+ * control per row and `form.closest("tr, li")` in HideButton's own
+ * script still finds the enclosing `<li>` to remove. With a `panel`
+ * slot (the product list: Edit + Delete), the panel is whatever the
+ * page put there — real links and forms that work on their own — and
+ * a full-width swipe only snaps the panel open; it never fires an
+ * action, since the actions there can be destructive.
+ *
+ * `plain` skips the `.ui-li` class on the content wrapper for rows
+ * whose slotted content already is the `.ui-li` (a whole-row link).
  *
  * Engagement rule: a pointer gesture only becomes a swipe once it has
  * moved more than 10px and is more horizontal than vertical; anything
  * else (a tap, a vertical scroll) is left alone, and `touch-action:
  * pan-y` on the wrapper keeps native vertical scrolling working. Once
- * engaged, content is dragged with the pointer, clamped to [-88, 0];
- * on release it snaps open past ~40px, snaps shut otherwise, or (past
- * ~55% of the row's width, uncapped by the visual clamp) hides
- * immediately. Only one row is open at a time — starting a drag
- * elsewhere, or any pointerdown outside the open row, closes it. A
- * click that follows a real drag is swallowed (capture-phase, once)
- * so the title link underneath doesn't navigate.
+ * engaged, content is dragged with the pointer, clamped to
+ * [-panelWidth, 0]; on release it snaps open past ~40px, snaps shut
+ * otherwise, or (Hide only, past ~55% of the row's width, uncapped by
+ * the visual clamp) hides immediately. Only one row is open at a time
+ * — starting a drag elsewhere, or any pointerdown outside the open
+ * row, closes it. A click that follows a real drag is swallowed
+ * (capture-phase, once) so the link underneath doesn't navigate.
  *
  * This is touch chrome: on hover-capable devices the ghost Hide
  * button in `.ui-li-aside` stays visible instead (see global.css),
  * and this component still renders (inert) so markup doesn't fork by
  * input type. */
+interface Props { plain?: boolean }
+const { plain = false } = Astro.props;
+const hasPanel = Astro.slots.has("panel");
 ---
-<div class="swipe-row" data-swipe-row>
-  <div class="swipe-panel" data-swipe-panel role="button" tabindex="-1" aria-hidden="true">Hide</div>
-  <div class="ui-li swipe-content" data-swipe-content>
+<div class="swipe-row" data-swipe-row data-swipe-commit={hasPanel ? undefined : "hide"}>
+  {hasPanel ? (
+    <div class="swipe-panel swipe-panel-actions" data-swipe-panel>
+      <slot name="panel" />
+    </div>
+  ) : (
+    <div class="swipe-panel" data-swipe-panel data-swipe-hide role="button" tabindex="-1" aria-hidden="true">Hide</div>
+  )}
+  <div class:list={["swipe-content", { "ui-li": !plain }]} data-swipe-content>
     <slot />
   </div>
 </div>
 <script>
-  const OPEN_X = -88;
   const DRAG_THRESHOLD = 10;
   const OPEN_THRESHOLD = 40;
   const COMMIT_RATIO = 0.55;
 
   let openRow: HTMLElement | null = null;
+
+  function panelWidth(row: HTMLElement): number {
+    const panel = row.querySelector<HTMLElement>("[data-swipe-panel]");
+    return panel ? panel.getBoundingClientRect().width || 88 : 88;
+  }
 
   function closeRow(row: HTMLElement) {
     const content = row.querySelector<HTMLElement>("[data-swipe-content]");
@@ -61,9 +83,10 @@
     const content = target.closest<HTMLElement>("[data-swipe-content]");
     if (!content || !row) return; // not a drag start (e.g. a tap on the panel)
 
+    const openX = -panelWidth(row);
     const startX = e.clientX;
     const startY = e.clientY;
-    const baseX = row.dataset.open === "1" ? OPEN_X : 0;
+    const baseX = row.dataset.open === "1" ? openX : 0;
     let engaged = false;
     let dragged = false;
     let dx = 0;
@@ -78,7 +101,7 @@
       }
       dragged = true;
       rawDx = baseX + cx;
-      dx = Math.min(0, Math.max(OPEN_X, rawDx));
+      dx = Math.min(0, Math.max(openX, rawDx));
       content.style.transition = "none";
       content.style.transform = `translateX(${dx}px)`;
     };
@@ -90,11 +113,11 @@
       if (!engaged) return;
       content.style.transition = "";
       const width = row.getBoundingClientRect().width || 1;
-      if (Math.abs(rawDx) >= width * COMMIT_RATIO) {
+      if (row.dataset.swipeCommit === "hide" && Math.abs(rawDx) >= width * COMMIT_RATIO) {
         submitHide(row);
         openRow = null;
       } else if (dx <= -OPEN_THRESHOLD) {
-        content.style.transform = `translateX(${OPEN_X}px)`;
+        content.style.transform = `translateX(${openX}px)`;
         row.dataset.open = "1";
         openRow = row;
       } else {
@@ -119,7 +142,7 @@
     document.addEventListener("pointercancel", onUp);
   });
 
-  document.querySelectorAll<HTMLElement>("[data-swipe-panel]").forEach((panel) => {
+  document.querySelectorAll<HTMLElement>("[data-swipe-hide]").forEach((panel) => {
     panel.addEventListener("click", () => {
       const row = panel.closest<HTMLElement>("[data-swipe-row]");
       if (row) submitHide(row);

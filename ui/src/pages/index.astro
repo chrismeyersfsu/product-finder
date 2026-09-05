@@ -10,13 +10,17 @@
  * data-layer change. Tapping a row goes to that product's results;
  * the header's "+" goes to /products/new. `?product=slug` (the old
  * Deals URL) redirects to `/deals/slug` so old links and bookmarks
- * keep working. `?saved=slug` / `?deleted=slug` (set by
+ * keep working. Swiping a row left (SwipeRow, touch devices) reveals
+ * Edit and Delete; Delete posts the same guarded `_action=delete` form
+ * as the edit page (confirm() on the client, `confirm=<slug>` checked
+ * on the server). `?saved=slug` / `?deleted=slug` (set by
  * /products/[slug] after a save or delete — there is no separate
  * "Manage products" page to land on) render a one-line
  * confirmation. */
 export const prerender = false;
 import EmptyState from "../components/EmptyState.astro";
 import Layout from "../layouts/Layout.astro";
+import SwipeRow from "../components/SwipeRow.astro";
 import * as db from "../lib/db";
 
 const url = Astro.url;
@@ -37,11 +41,26 @@ const deleted = url.searchParams.get("deleted");
     <ul class="listview">
       {products.map((p) => (
         <li>
-          <a class="ui-li" href={`/deals/${encodeURIComponent(p.slug)}`}>
-            <span class="ui-li-text">{p.name}</span>
-            <span class="ui-li-count">{p.count}</span>
-            <span class="ui-li-chevron">›</span>
-          </a>
+          <SwipeRow plain>
+            <a class="ui-li" href={`/deals/${encodeURIComponent(p.slug)}`}>
+              <span class="ui-li-text">{p.name}</span>
+              <span class="ui-li-count">{p.count}</span>
+              <span class="ui-li-chevron">›</span>
+            </a>
+            <Fragment slot="panel">
+              <a class="swipe-action swipe-action-edit" href={`/products/${encodeURIComponent(p.slug)}`}>Edit</a>
+              <form
+                class="swipe-action-form"
+                method="post"
+                action={`/products/${encodeURIComponent(p.slug)}`}
+                onsubmit={`return confirm(${JSON.stringify(`Delete "${p.name}" (${p.slug}) and all its listings? This cannot be undone.`)})`}
+              >
+                <input type="hidden" name="_action" value="delete" />
+                <input type="hidden" name="confirm" value={p.slug} />
+                <button type="submit" class="swipe-action swipe-action-delete">Delete</button>
+              </form>
+            </Fragment>
+          </SwipeRow>
         </li>
       ))}
     </ul>

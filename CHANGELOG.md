@@ -28,6 +28,8 @@
   remains on desktop.
 - Edit product has a back button to the product's results; New
   product has one to the product list.
+- Swipe a product left on the product list to reveal Edit and
+  Delete (Delete asks for confirmation first).
 
 ## 0.22.1 — 2026-09-05
 
