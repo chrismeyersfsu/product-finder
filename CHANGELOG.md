@@ -21,6 +21,8 @@
   it had been refusing about four plain-HTTP searches in five.
 - Sort is its own row on the results page, always visible, instead of
   hidden inside Filters.
+- Manage products page removed; saving or deleting a product returns
+  to the product list.
 
 ## 0.22.1 — 2026-09-05
 

@@ -7,9 +7,13 @@
  * disagrees with what `/deals/[slug]` actually shows once a product
  * has more than 100 qualifying listings (common in this data set).
  * Calling db.deals() per product is a few cheap indexed queries, not a
- * data-layer change. Tapping a row goes to that product's results.
- * `?product=slug` (the old Deals URL) redirects to `/deals/slug` so
- * old links and bookmarks keep working. */
+ * data-layer change. Tapping a row goes to that product's results;
+ * the header's "+" goes to /products/new. `?product=slug` (the old
+ * Deals URL) redirects to `/deals/slug` so old links and bookmarks
+ * keep working. `?saved=slug` / `?deleted=slug` (set by
+ * /products/[slug] after a save or delete — there is no separate
+ * "Manage products" page to land on) render a one-line
+ * confirmation. */
 export const prerender = false;
 import EmptyState from "../components/EmptyState.astro";
 import Layout from "../layouts/Layout.astro";
@@ -20,9 +24,13 @@ const legacyProduct = url.searchParams.get("product");
 if (legacyProduct) return Astro.redirect(`/deals/${encodeURIComponent(legacyProduct)}`, 303);
 
 const products = db.listProducts().map((p) => ({ ...p, count: db.deals(p.slug).length }));
+const saved = url.searchParams.get("saved");
+const deleted = url.searchParams.get("deleted");
 ---
 <Layout title="product-finder" active="home" action={{ href: "/products/new", label: "+" }}>
   {!db.hasDb() && <EmptyState what="database" tool="seed_defaults" />}
+  {saved && <p class="banner">Saved "{saved}".</p>}
+  {deleted && <p class="banner">Deleted "{deleted}".</p>}
   {products.length === 0 ? (
     <EmptyState what="products" tool="seed_defaults" />
   ) : (

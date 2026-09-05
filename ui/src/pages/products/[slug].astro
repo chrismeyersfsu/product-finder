@@ -3,12 +3,14 @@
  * taken from the form. Handles its own POST: same-origin check, then
  * one of three actions — delete (_action=delete, guarded by a
  * confirm() on the client and a matching hidden `confirm` field on
- * the server), scrape (_action=scrape, drops a scrape-now queue file
- * and redirects back), or the main form (parse + validate, re-render
- * with errors on failure, save + redirect to the list on success).
- * `?created=1&queued=0|1` (set by /products/new after a create) and
- * `?scrape=queued` (set after this page's own Scrape now button)
- * render one-line confirmations. Unknown slug -> 404. */
+ * the server; redirects to the product list, `/?deleted=<slug>`),
+ * scrape (_action=scrape, drops a scrape-now queue file and redirects
+ * back), or the main form (parse + validate, re-render with errors on
+ * failure, save + redirect to the product list on success,
+ * `/?saved=<slug>`; the list renders both banners). `?created=1&queued=0|1`
+ * (set by /products/new after a create) and `?scrape=queued` (set
+ * after this page's own Scrape now button) render one-line
+ * confirmations here. Unknown slug -> 404. */
 export const prerender = false;
 import ProductForm from "../../components/ProductForm.astro";
 import Layout from "../../layouts/Layout.astro";
@@ -35,7 +37,7 @@ if (Astro.request.method === "POST") {
   if (action === "delete") {
     if (String(form.get("confirm") ?? "") !== slug) return new Response("confirmation mismatch", { status: 400 });
     deleteProduct(slug);
-    return Astro.redirect(`/products?deleted=${encodeURIComponent(slug)}`, 303);
+    return Astro.redirect(`/?deleted=${encodeURIComponent(slug)}`, 303);
   }
 
   if (action === "scrape") {
@@ -47,7 +49,7 @@ if (Astro.request.method === "POST") {
   errors = parsed.errors;
   if (errors.length === 0) {
     saveProduct(parsed.product);
-    return Astro.redirect(`/products?saved=${encodeURIComponent(slug)}`, 303);
+    return Astro.redirect(`/?saved=${encodeURIComponent(slug)}`, 303);
   }
   values = formDefaults(parsed.product);
 }
@@ -62,7 +64,7 @@ if (scrape.runningSince) scrapeLine = `Running since ${hhmm(scrape.runningSince)
 else if (scrape.queued) scrapeLine = "Queued — waiting for the scraper";
 else if (scrape.last) scrapeLine = `Last on-demand scrape ${hhmm(scrape.last.at)}: ${scrape.last.text}`;
 ---
-<Layout title={`Edit ${product.name}`} active="manage">
+<Layout title={`Edit ${product.name}`} active="home">
   <div class="card">
     <h2>
       Edit product <span class="sub">— {slug}, created {day(product.created_at)}, updated {day(product.updated_at)}</span>
