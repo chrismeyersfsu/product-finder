@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.1 — 2026-09-05
+
+- Discogs listings show cover art: unauthenticated search rows come
+  back with empty `thumb`/`cover_image`, so the parser now falls back
+  to the release's own `thumb` / primary image.
+
 ## 0.22.0 — 2026-09-04
 
 - Dashboard UI reworked as a jQuery-Mobile-style app: a header bar

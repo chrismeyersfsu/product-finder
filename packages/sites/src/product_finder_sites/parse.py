@@ -525,6 +525,16 @@ def _discogs_label(release: dict, entry: dict) -> str:
     return str(entry_labels[0]) if entry_labels else ""
 
 
+def _discogs_release_image(release: dict) -> str | None:
+    """Cover art from a /releases/{id} payload: `thumb` (150px) when set,
+    else the primary image's 150px variant, else its full-size `uri`."""
+    if release.get("thumb"):
+        return release["thumb"]
+    images = release.get("images") or []
+    primary = next((i for i in images if i.get("type") == "primary"), images[0] if images else {})
+    return primary.get("uri150") or primary.get("uri") or None
+
+
 def _parse_discogs_api(body: str) -> list[dict]:
     """`body` is fetch_discogs_api's own combined JSON, not a raw
     Discogs response — see api.py's fetch_discogs_api docstring for the
@@ -554,7 +564,11 @@ def _parse_discogs_api(body: str) -> list[dict]:
             f" — {num_for_sale} for sale"
         )
         lowest_price = release.get("lowest_price")
-        image_url = entry.get("thumb") or entry.get("cover_image") or None
+        # Unauthenticated search rows carry empty thumb/cover_image; the
+        # release we fetch anyway has the cover under thumb/images[].
+        image_url = (
+            entry.get("thumb") or entry.get("cover_image") or _discogs_release_image(release)
+        )
         out.append(
             {
                 "title": title,

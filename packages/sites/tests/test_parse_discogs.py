@@ -11,6 +11,7 @@ covering a zero-for-sale pressing (dropped) and a for-sale pressing
 with no price set and a "(2)"-disambiguated artist name.
 """
 
+import json
 import time
 from pathlib import Path
 
@@ -199,7 +200,26 @@ def test_discogs_rows_become_listings():
     expected_title = "Beck! – Odelay (1996, Bong Load Custom Records, US) — 1 for sale"  # noqa: RUF001
     assert second["title"] == expected_title
     assert second["price"] == 84.55
-    assert second["image_url"] is None  # both thumb and cover_image are empty
+    # search-row thumb/cover_image are empty (unauthenticated), so the
+    # cover comes from the release payload's images[] instead
+    assert second["image_url"].startswith("https://i.discogs.com/OKIqzEsSQmSqg1nyfJ")
+
+
+def test_discogs_release_thumb_beats_images_and_missing_images_is_none():
+    payload = json.loads((FIXTURES / "discogs_api.json").read_text())
+    payload["releases"][1]["release"]["thumb"] = "https://i.discogs.com/rel-thumb-22884872.jpeg"
+    out = parse.parse_listings(
+        DISCOGS, "https://api.discogs.com/database/search", json.dumps(payload)
+    )
+    assert out[1]["image_url"] == "https://i.discogs.com/rel-thumb-22884872.jpeg"
+    # No search thumb, no release thumb, no images -> no photo (88888888
+    # has stock; 99999999 has none and never reaches the output).
+    payload["releases"][3]["cover_image"] = ""
+    out = parse.parse_listings(
+        DISCOGS, "https://api.discogs.com/database/search", json.dumps(payload)
+    )
+    no_art = next(r for r in out if r["url"].endswith("/88888888"))
+    assert no_art["image_url"] is None
 
 
 def test_discogs_disambiguated_artist_and_missing_price():
