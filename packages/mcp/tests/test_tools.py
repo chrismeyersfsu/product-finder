@@ -133,7 +133,7 @@ def test_project_tools_scoped_to_root(tmp_path, monkeypatch):
 
 
 def test_tools_registered():
-    assert len(server.TOOLS) == 30
+    assert len(server.TOOLS) == 27
 
 
 def test_home_and_distances(monkeypatch):
@@ -223,6 +223,24 @@ def test_hide_listing_drops_it_from_deals_until_unhidden():
     assert server.unhide_listing(b)["hidden"] is False
     assert len(server.best_deals("thin-client-laptop")["deals"]) == 2
     assert "error" in server.hide_listing(12345)
+
+
+def test_pin_listing_is_returned_by_query_and_survives_hide():
+    server.seed_defaults()
+    conn = server._connect()
+    base = {"product_slug": "thin-client-laptop", "site_slug": "ebay", "score": 0.9, "price": 5.0}
+    a = storage.upsert_listing(conn, {**base, "url": "e://3", "title": "keep"})
+    assert server.pin_listing(a) == {"id": a, "pinned": True}
+    rows = {r["id"]: r for r in server.query_listings("thin-client-laptop")}
+    assert rows[a]["pinned_at"] is not None
+    assert server.unpin_listing(a)["pinned"] is False
+    assert server.query_listings("thin-client-laptop")[0]["pinned_at"] is None
+    assert "error" in server.pin_listing(12345)
+
+    # a hidden listing stays hidden even while pinned
+    server.pin_listing(a)
+    server.hide_listing(a)
+    assert server.query_listings("thin-client-laptop") == []
 
 
 def test_new_within_days_filters_on_first_seen():

@@ -6,8 +6,8 @@ the dashboard writes into (one product; see
 infra/systemd/product-finder-scrape-now.*). Never speaks MCP and adds
 no pipeline logic of its own — both paths drive server.rescore_product
 then server.run_search per product (through the shared _scrape_product
-helper, so the two paths can't drift) so scoring, storage, and price-
-history accrual stay in one place. The rescore first is what makes
+helper, so the two paths can't drift) so scoring and storage stay in
+one place. The rescore first is what makes
 product edits made elsewhere (the dashboard's Products pages write the
 products table directly) reach stored listings within the hour, or
 immediately for a queued request.

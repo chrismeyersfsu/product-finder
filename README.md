@@ -163,41 +163,6 @@ dashboard's Products pages reach stored listings within the hour.
 - `packages/browser` — the Playwright tier, wired into the sites seam
 - `packages/mcp` — the MCP server and search pipeline glue
 
-## Backtesting deals
-
-Does waiting longer actually get a better price — and which site wins?
-`run_backtest` samples random **pivot dates** from the past year of
-observed history (seeded, so results are reproducible) and asks, for
-each pivot: what was the best qualifying deal in the trailing 3 days,
-1, 2, 4, 8, and 16 weeks? It then compares each longer window against
-the 3-day baseline with paired differences and a 95% bootstrap CI, and
-reports per-site win rates. Results are stored in SQLite
-(`backtests` table) — interact with them via `get_backtest` /
-`list_backtests`.
-
-The honest part: **backtests only see prices this database has
-observed.** There is no way to scrape a year of history on demand.
-History accrues three ways:
-
-- every `run_search` appends `kind='seen'` observations to
-  `price_history`;
-- `backfill_ebay_sold` pulls real eBay sold/completed listings with
-  their sale dates (`kind='sold'`) — eBay exposes roughly the last 90
-  days;
-- `add_price_observation` records points by hand (or from an import).
-
-Until the span covers a window, that window is dropped and listed in
-`coverage.dropped_windows`; windows with fewer than 30 data-bearing
-pivots are flagged `insufficient_data` instead of being interpreted.
-Every result carries a `caveats` list (notably: overlapping windows
-share observations, so CIs are optimistic). Read the `verdict` block
-first — it says, in plain English, whether waiting helps, by how many
-dollars, whether that difference is statistically distinguishable from
-zero, and which site supplies the winning deal most often.
-
-Example, over MCP: `run_backtest("thin-client-laptop")`, later
-`list_backtests()` and `get_backtest(id)`.
-
 ## Dashboard UI
 
 An Astro (SSR) dashboard in `ui/` reads the same SQLite db (its
@@ -215,16 +180,14 @@ queue files described under Deployment):
   "New within N days" keeps only those. **Hide** drops a listing from
   deals for good (it keeps refreshing on scrapes, so it never returns
   as new); `hide_listing` / `unhide_listing` do the same over MCP.
+  **Pin** stamps `listings.pinned_at` and keeps a listing at the top of
+  deals; `pin_listing` / `unpin_listing` do the same over MCP. A hidden
+  listing stays hidden even if it's pinned.
 - **Hidden** (`/hidden`) — every hidden listing, newest first, with an
   Unhide button.
 - On a phone the Deals and Hidden tables become cards (no sideways
   scrolling) with Hide/Unhide pinned top-right and a Sort select in
   place of the column headers.
-- **History** (`/history`) — observed prices over time; filled dots are
-  real sold prices, rings are asking prices.
-- **Backtests** (`/backtests`) — every stored backtest, visualized:
-  best price by lookback window, savings vs the 3-day baseline with
-  95% CIs, and per-site win rates. Caveats are always shown.
 - **Products** (`/products`) — every product with its listing counts.
   **New product** needs only a name: the slug and the search query are
   generated from it, the first scrape is queued immediately, and

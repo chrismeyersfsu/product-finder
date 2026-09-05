@@ -7,7 +7,6 @@ dependencies = [
     "mcp>=2",
     "product-finder-core",
     "product-finder-sites",
-    "product-finder-backtest",
     "product-finder-geo",
 ]
 
@@ -24,7 +23,6 @@ dev = ["pytest>=8"]
 [tool.uv.sources]
 product-finder-core = { workspace = true }
 product-finder-sites = { workspace = true }
-product-finder-backtest = { workspace = true }
 product-finder-geo = { workspace = true }
 product-finder-browser = { workspace = true }
 

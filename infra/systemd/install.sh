@@ -47,7 +47,7 @@ new_ui=$(podman image inspect -f '{{.Id}}' localhost/product-finder-ui:latest)
 
 echo "== data dir =="
 # One-time migration: adopt a repo-root db from the pre-quadlet era so
-# existing listings/backtests survive. WAL sidecars move with it.
+# existing listings survive. WAL sidecars move with it.
 mkdir -p "$REPO/data"
 if [[ ! -f "$REPO/data/product_finder.db" && -f "$REPO/product_finder.db" ]]; then
     for f in product_finder.db product_finder.db-wal product_finder.db-shm; do

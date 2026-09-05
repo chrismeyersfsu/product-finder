@@ -114,12 +114,30 @@ def test_migrate_adds_distance_column_to_old_db(tmp_path):
     conn = storage.connect(str(path))
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(listings)")}
     assert "distance_mi" in cols
+    assert "pinned_at" in cols
     assert "sites" in {r["name"] for r in conn.execute("PRAGMA table_info(products)")}
     storage.upsert_product(conn, {"slug": "w"})
     storage.upsert_listing(
         conn, {"product_slug": "w", "site_slug": "fb", "url": "u", "distance_mi": 1}
     )
     assert storage.listings_with_location(conn) == []
+
+
+def test_migrate_drops_price_history_and_backtests(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "legacy.db"
+    raw = sqlite3.connect(str(path))
+    raw.executescript(
+        """CREATE TABLE price_history (id INTEGER PRIMARY KEY, product_slug TEXT);
+           CREATE INDEX idx_price_history_lookup ON price_history(product_slug);
+           CREATE TABLE backtests (id INTEGER PRIMARY KEY, product_slug TEXT);"""
+    )
+    raw.close()
+    conn = storage.connect(str(path))
+    tables = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert "price_history" not in tables
+    assert "backtests" not in tables
 
 
 def test_listing_unit_price_columns(tmp_path):
@@ -151,6 +169,34 @@ def test_hidden_listings_survive_rescrape_and_drop_from_queries(tmp_path):
     assert len(storage.query_listings(conn, "w")) == 1
     assert storage.hidden_listings(conn) == []
     assert not storage.set_listing_hidden(conn, 999, True)
+
+
+def test_pinned_listings_survive_rescrape(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_product(conn, {"slug": "w"})
+    li = {"product_slug": "w", "site_slug": "ebay", "url": "http://x/9", "score": 0.5}
+    lid = storage.upsert_listing(conn, li)
+    assert storage.set_listing_pinned(conn, lid, True)
+    stamp = storage.query_listings(conn, "w")[0]["pinned_at"]
+    assert stamp is not None
+    storage.upsert_listing(conn, {**li, "price": 1.0})  # a later scrape refreshes the row
+    assert storage.set_listing_pinned(conn, lid, True)  # idempotent: stamp is kept
+    assert storage.query_listings(conn, "w")[0]["pinned_at"] == stamp
+    assert storage.set_listing_pinned(conn, lid, False)
+    assert storage.query_listings(conn, "w")[0]["pinned_at"] is None
+    assert not storage.set_listing_pinned(conn, 999, True)
+
+
+def test_pinned_listing_still_hidden_when_hidden(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_product(conn, {"slug": "w"})
+    li = {"product_slug": "w", "site_slug": "ebay", "url": "http://x/10", "score": 0.5}
+    lid = storage.upsert_listing(conn, li)
+    storage.set_listing_pinned(conn, lid, True)
+    storage.set_listing_hidden(conn, lid, True)
+    assert storage.query_listings(conn, "w") == []
+    rows = storage.query_listings(conn, "w", include_hidden=True)
+    assert rows[0]["pinned_at"] is not None and rows[0]["hidden_at"] is not None
 
 
 def test_query_first_seen_since(tmp_path):

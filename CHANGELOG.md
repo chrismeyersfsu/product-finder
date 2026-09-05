@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.22.0 — 2026-09-04
+
+- Removed the backtesting feature entirely: `packages/backtest`, the
+  `run_backtest` / `get_backtest` / `list_backtests` MCP tools, and the
+  `backtests` table are gone.
+- Removed the price-history feature: the `price_history` table and the
+  `add_price_observation` / `price_history_stats` MCP tools are gone;
+  `run_search` no longer accrues `kind='seen'` observations, and
+  `backfill_ebay_sold` now scores eBay sold listings without storing
+  them anywhere. `first_seen`/`last_seen` on listings and `search_runs`
+  are unaffected.
+- Listings can now be pinned to the top of deals: `pinned_at` on
+  `listings`, and new MCP tools `pin_listing` / `unpin_listing`
+  (mirrors hide/unhide; a hidden listing stays hidden even if pinned).
+- The `backtests` and `price_history` tables are dropped automatically
+  the next time the database is opened; there is no way back for
+  anything stored in them.
+
 ## 0.21.0 — 2026-09-04
 
 - Monitor page (`/monitor`): the hourly sync's live progress (bar plus
