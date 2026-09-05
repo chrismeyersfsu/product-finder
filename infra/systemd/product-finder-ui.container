@@ -10,6 +10,8 @@ Volume=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data:/home/cmeyers
 Environment=PF_DB=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data/product_finder.db
 Environment=HOST=127.0.0.1
 Environment=PORT=4321
+# Times on the dashboard (Scrape now status) are shown in local time.
+Environment=TZ=America/New_York
 
 [Service]
 Restart=always
