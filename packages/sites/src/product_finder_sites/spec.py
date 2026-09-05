@@ -90,6 +90,14 @@ headless browser: autotrader, cargurus, carfax, truecar (captcha),
 carmax, edmunds, kbb (Akamai "Access Denied"); hemmings renders but is
 a classic-car site.
 
+bhphotovideo (kind "bhphotovideo", flat, plain HTTP) is fetched like a
+css site but parsed from the search page's bh-preloaded-data state blob
+instead of its cards — B&H only server-renders an <img> for the first
+two cards, so a css parse loses ~95% of thumbnails (and the two it
+gets are behind a hotlink-blocked cdn-cgi proxy); see parse.py. Its
+plain HTTP is intermittently 403'd from this network; there is no
+browser tier for it yet.
+
 discogs (kind "discogs_api", flat) is keyless via api.discogs.com: the
 marketplace HTML at discogs.com/sell is Cloudflare-walled, but the
 database/search + release JSON endpoints answer anonymous requests
@@ -231,15 +239,12 @@ _FLAT_SITES = [
         "div.prices span.your-price",
         "div.item-details a",
     ),
-    _css(
-        "bhphotovideo",
-        "B&H Photo Video",
-        "https://www.bhphotovideo.com/c/search?q={query}",
-        "div[data-selenium='miniProductPage']",
-        "span[data-selenium='miniProductPageProductName']",
-        "span[data-selenium='uppedDecimalPrice']",
-        "a[data-selenium='miniProductPageProductNameLink']",
-    ),
+    {
+        "slug": "bhphotovideo",
+        "name": "B&H Photo Video",
+        "kind": "bhphotovideo",
+        "config": {"url": "https://www.bhphotovideo.com/c/search?q={query}"},
+    },
     _css(
         "microcenter",
         "Micro Center",

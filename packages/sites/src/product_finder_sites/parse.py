@@ -77,6 +77,19 @@ nationwide delivery site — its rows have no location, so a distance
 cap hides them). carscom reads each fuse-card's data-vehicle-details
 JSON attribute rather than the visible spans; carvana reads the
 per-vehicle schema.org Vehicle JSON-LD scripts on its results page.
+
+bhphotovideo reads the search page's `div.bh-preloaded-data` blob (the
+React store state, HTML-escaped JSON in its data-data attribute) at
+ListingStore.state.response.data.items rather than the SSR'd
+miniProductPage cards: B&H server-renders an <img> for only the first
+two cards and hydrates the rest client-side, so a css parse of the
+cards sees no image on ~95% of rows, and the two it does see point at
+B&H's cdn-cgi/image proxy, which 403s hotlinks. Each item's
+core.shortDescription/detailsUrl, priceInfo.price (None when the price
+is withheld) and mainImage.default.url (static.bhphoto.com, hotlinkable)
+become the row; core.isUsed sets condition "used". No blob, or a blob
+without that items list, parses to [] so run.search_site reports the
+page as a challenge/no-items error rather than raising.
 """
 
 import json
@@ -843,6 +856,47 @@ def _parse_carvana(page_url: str, body: str) -> list[dict]:
     return out
 
 
+def _parse_bhphotovideo(page_url: str, body: str) -> list[dict]:
+    soup = BeautifulSoup(body, "html.parser")
+    node = soup.select_one("div.bh-preloaded-data")
+    if node is None:
+        return []
+    try:
+        state = json.loads(node.get("data-data") or "")
+    except ValueError:
+        return []
+    items = state
+    for key in ("ListingStore", "state", "response", "data", "items"):
+        items = items.get(key) if isinstance(items, dict) else None
+        if items is None:
+            return []
+    out = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        core = item.get("core") or {}
+        title = str(core.get("shortDescription") or "").strip()
+        href = core.get("detailsUrl")
+        if not title or not href:
+            continue
+        price = (item.get("priceInfo") or {}).get("price")
+        image_url = ((item.get("mainImage") or {}).get("default") or {}).get("url")
+        out.append(
+            {
+                "title": title,
+                "price": float(price) if price else None,
+                "url": urljoin(page_url, str(href)),
+                "seller_rating": None,
+                "seller_feedback_count": None,
+                "sold_at": None,
+                "location": None,
+                "condition": "used" if core.get("isUsed") else None,
+                "image_url": image_url or None,
+            }
+        )
+    return out
+
+
 def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
     """Dispatch on strategy kind. `strategy` is a {kind, config} dict —
     a flat single-strategy site works too (same shape)."""
@@ -873,4 +927,6 @@ def parse_listings(strategy: dict, page_url: str, body: str) -> list[dict]:
         return _parse_carscom(page_url, body)
     if kind == "carvana":
         return _parse_carvana(page_url, body)
+    if kind == "bhphotovideo":
+        return _parse_bhphotovideo(page_url, body)
     raise ValueError(f"unknown strategy kind: {kind}")
