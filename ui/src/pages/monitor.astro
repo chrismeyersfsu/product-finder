@@ -72,7 +72,7 @@ const highlightText = highlightLine();
 
 const queueActiveCount = queue.filter((q) => q.kind !== "done").length;
 ---
-<Layout title="Monitor" active="monitor" product={productSlug || undefined} refreshSeconds={refreshing ? 15 : undefined}>
+<Layout title="Monitor" active="monitor" refreshSeconds={refreshing ? 15 : undefined}>
   {!db.hasDb() && <EmptyState what="database" tool="seed_defaults" />}
 
   <div class="card">

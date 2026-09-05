@@ -1,7 +1,10 @@
 ---
-/** Every listing hidden from deals, newest first, with an Unhide
- * button per row. Hidden rows keep refreshing on scrapes, so price and
- * last seen here are current. */
+/** Every listing hidden from deals across every product, newest first,
+ * with an Unhide button per row; an optional Product select narrows it
+ * to one. Hidden rows keep refreshing on scrapes, so price and last
+ * seen here are current. Styled as the same jQuery-Mobile listview as
+ * the results page, with the product name on its meta line since rows
+ * can span every product. */
 import EmptyState from "../components/EmptyState.astro";
 import HideButton from "../components/HideButton.astro";
 import Layout from "../layouts/Layout.astro";
@@ -16,57 +19,58 @@ const rows = db.hiddenListings(productSlug || undefined);
 const knownSites = db.listSites().map((s) => s.slug);
 const back = url.pathname + url.search;
 ---
-<Layout title="Hidden" active="hidden" product={productSlug || undefined}>
+<Layout title="Hidden" active="hidden">
   {!db.hasDb() && <EmptyState what="database" tool="seed_defaults" />}
-  <form class="filters" method="get" action="/hidden">
-    <label>Product
-      <select name="product">
-        <option value="" selected={!productSlug}>All products</option>
-        {products.map((p) => <option value={p.slug} selected={p.slug === productSlug}>{p.name}</option>)}
-      </select>
-    </label>
-    <button type="submit">Apply</button>
-  </form>
+  <details class="collapsible" open={!!productSlug}>
+    <summary>Product{productSlug && <span class="badge">1 active</span>}</summary>
+    <div class="collapsible-body">
+      <form class="filters" method="get" action="/hidden">
+        <label>Product
+          <select name="product" onchange="this.form.requestSubmit()">
+            <option value="" selected={!productSlug}>All products</option>
+            {products.map((p) => <option value={p.slug} selected={p.slug === productSlug}>{p.name}</option>)}
+          </select>
+        </label>
+        <button type="submit">Apply</button>
+      </form>
+    </div>
+  </details>
 
   {rows.length === 0 ? (
     <div class="empty">
       <p>Nothing hidden{productSlug ? " for this product" : ""}.</p>
-      <p>Use <strong>Hide</strong> on a row of the Deals page to keep it out of the way; it will show up here.</p>
+      <p>Use <strong>Hide</strong> on a row of a results page to keep it out of the way; it will show up here.</p>
     </div>
   ) : (
-    <div class="card">
-      <h2>Hidden listings <span class="sub">— {rows.length} kept out of deals; Unhide puts one back</span></h2>
-      <div class="wrap-x">
-        <table class="data cards" data-sortable>
-          <thead>
-            <tr>
-              <th>Listing</th><th>Product</th><th>Site</th><th class="num">Price</th>
-              <th class="num">Score</th><th>Condition</th><th>Last seen</th>
-              <th aria-sort="descending">Hidden</th><th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr>
-                <td class="c-title">
-                  <div class="titled">
-                    {r.image_url && <img class="thumb" src={r.image_url} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" />}
-                    <a href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a>
-                  </div>
-                </td>
-                <td data-label="Product"><a href={`/?product=${encodeURIComponent(r.product_slug)}`}>{r.product_name}</a></td>
-                <td data-label="Site"><span class="swatch" style={`background:${siteVar(r.site_slug, knownSites)}`}></span>{r.site_slug}</td>
-                <td class="num" data-label="Price">{moneyCents(r.price)}</td>
-                <td class="num" data-label="Score">{r.score == null ? "—" : r.score.toFixed(2)}</td>
-                <td class:list={["c-wide", { "c-empty": !r.condition }]} data-label="Condition">{r.condition ?? "—"}</td>
-                <td class="c-minor" data-label="Last seen">{day(r.last_seen)}</td>
-                <td data-label="Hidden">{(r.hidden_at ?? "").slice(0, 16).replace("T", " ")}</td>
-                <td class="c-act"><HideButton id={r.id} hidden={true} back={back} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <ul class="listview">
+      {rows.map((r) => (
+        <li class="ui-li-has-thumb">
+          <div class="ui-li">
+            {r.image_url ? (
+              <img class="ui-li-thumb" src={r.image_url} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()" />
+            ) : (
+              <span class="ui-li-thumb-placeholder">no photo</span>
+            )}
+            <div class="ui-li-body">
+              <a class="ui-li-title" href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a>
+              <div class="ui-li-price-row">
+                <span class="ui-li-price">{moneyCents(r.price)}</span>
+              </div>
+              <div class="ui-li-meta">
+                <a href={`/deals/${encodeURIComponent(r.product_slug)}`}>{r.product_name}</a>
+                {" · "}<span class="swatch" style={`background:${siteVar(r.site_slug, knownSites)}`}></span>{r.site_slug}
+                {" · score "}{r.score == null ? "—" : r.score.toFixed(2)}
+                {" · "}{r.condition ?? "—"}
+                {" · last seen "}{day(r.last_seen)}
+                {" · hidden "}{(r.hidden_at ?? "").slice(0, 10)}
+              </div>
+            </div>
+            <div class="ui-li-aside">
+              <HideButton id={r.id} hidden={true} back={back} />
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
   )}
 </Layout>

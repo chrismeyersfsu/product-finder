@@ -112,7 +112,7 @@ of a product whose listings carry `year` and `mileage`, the finder fits
 `ln(price) ~ age + miles` over that product's own listings (all sites;
 salvage, parts and placeholder prices excluded; residual outliers
 trimmed) and stores each row's fitted price as `est_value`. `best_deals`
-and the Deals page report `pct_vs_est` / **vs est.** against it. It is
+and the dashboard's results page report `pct_vs_est` / **vs est.** against it. It is
 what that year and mileage is *asking* in your market, not KBB's
 transaction data; it needs at least 10 usable listings.
 
@@ -166,36 +166,46 @@ dashboard's Products pages reach stored listings within the hour.
 ## Dashboard UI
 
 An Astro (SSR) dashboard in `ui/` reads the same SQLite db (its
-writes are the Hide button, which stamps `listings.hidden_at`, the
-Products pages, which edit the `products` table, and the scrape-now
-queue files described under Deployment):
+writes are the Hide and Pin buttons, which stamp `listings.hidden_at`
+/ `listings.pinned_at`, the Fields checkboxes, which stamp a
+`listing_fields` row in `settings`, the Products pages, which edit the
+`products` table, and the scrape-now queue files described under
+Deployment). It's styled as a jQuery Mobile listview app — a header
+bar with a hamburger menu, one item per line, no plain HTML tables for
+the listing-heavy pages — and works with JavaScript off.
 
-- **Deals** (`/`) — filterable best-deals table with KPI tiles and the
-  product's verify-by-hand checklist, each listing with its photo. Car
-  products show **Est. value** / **vs est.** (the fitted market value
-  above) in place of **vs median**, and a ⚠ line for anything a `flag`
-  criterion caught (salvage / rebuilt title). A
-  **First seen** column and a
-  `new` badge (first seen in the last 2 days) surface fresh listings;
-  "New within N days" keeps only those. **Hide** drops a listing from
-  deals for good (it keeps refreshing on scrapes, so it never returns
-  as new); `hide_listing` / `unhide_listing` do the same over MCP.
-  **Pin** stamps `listings.pinned_at` and keeps a listing at the top of
-  deals; `pin_listing` / `unpin_listing` do the same over MCP. A hidden
-  listing stays hidden even if it's pinned.
-- **Hidden** (`/hidden`) — every hidden listing, newest first, with an
-  Unhide button.
-- On a phone the Deals and Hidden tables become cards (no sideways
-  scrolling) with Hide/Unhide pinned top-right and a Sort select in
-  place of the column headers.
-- **Products** (`/products`) — every product with its listing counts.
-  **New product** needs only a name: the slug and the search query are
-  generated from it, the first scrape is queued immediately, and
-  everything else (sites, criteria, extractors, manual checks) waits
-  under *Advanced* on the product page for when you want it. Edit and
-  delete there too; **Scrape now** queues an immediate scrape of that
-  one product instead of waiting for the hourly run. Same data the
-  `add_product` MCP tool writes.
+- **Products** (`/`, the landing page) — every product, one line each,
+  with a count bubble of its qualifying (non-hidden, no hard fails)
+  listings; tap a product for its results. The hamburger panel (☰,
+  top left) holds the rest of the site: Products, Hidden, Sites,
+  Monitor, Manage products.
+- **Results** (`/deals/<slug>`) — one line per listing: photo, title,
+  price, and a muted meta line (site, score, distance, condition,
+  first/last seen, …). Car products show **vs est.** (a fitted market
+  value for that year and mileage, not KBB) alongside **vs median**;
+  a ⚠ line surfaces anything a `flag` criterion caught (salvage /
+  rebuilt title), and a `new` badge marks listings first seen in the
+  last 2 days. A **Filters** panel (collapsed unless something's
+  active) holds score/price/site/distance/age filters and a Sort
+  control; a **Fields** panel lets you check off exactly which
+  attributes show on every row (thumbnail, price, $/unit, seller
+  rating, …), saved for every product. **Pin** floats a listing to
+  its own bucket at the top of the list (the opposite of Hide);
+  **Hide** drops a listing from the results for good (it keeps
+  refreshing on scrapes, so it never returns as new). `hide_listing` /
+  `unhide_listing` and `pin_listing` / `unpin_listing` do the same over
+  MCP; a hidden listing stays hidden even if it's pinned.
+- **Hidden** (`/hidden`) — every hidden listing across every product,
+  newest first, with an Unhide button and an optional product filter.
+- **Manage products** (`/products`) — every product with its listing
+  counts. **New product** needs only a name:
+  the slug and the search query are generated from it, the first
+  scrape is queued immediately, and everything else (sites, criteria,
+  extractors, manual checks) waits under *Advanced* on the product
+  page for when you want it. Edit and delete there too; **Scrape
+  now** queues an immediate scrape of that one product instead of
+  waiting for the hourly run. Same data the `add_product` MCP tool
+  writes.
 - **Sites** (`/sites`) — which scrapers are actually working, with the
   strategy that ran and the last error.
 - **Monitor** (`/monitor`) — the hourly sync's live progress (a
@@ -209,8 +219,7 @@ queue files described under Deployment):
 Run it locally (`cd ui && npm install && npm run dev`, then
 http://localhost:4321, `PF_DB` to point at a db elsewhere) or in the
 container (`docker compose up ui`, port 4321, shares the `/data`
-volume with the MCP service). Charts follow a validated colorblind-safe
-palette; every chart has a table view, tooltips, and a dark mode.
+volume with the MCP service). Follows the system light/dark theme.
 
 ## Deployment
 

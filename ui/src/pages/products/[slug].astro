@@ -62,7 +62,7 @@ if (scrape.runningSince) scrapeLine = `Running since ${hhmm(scrape.runningSince)
 else if (scrape.queued) scrapeLine = "Queued — waiting for the scraper";
 else if (scrape.last) scrapeLine = `Last on-demand scrape ${hhmm(scrape.last.at)}: ${scrape.last.text}`;
 ---
-<Layout title={`Edit ${product.name}`} active="products">
+<Layout title={`Edit ${product.name}`} active="manage">
   <div class="card">
     <h2>
       Edit product <span class="sub">— {slug}, created {day(product.created_at)}, updated {day(product.updated_at)}</span>
@@ -77,7 +77,7 @@ else if (scrape.last) scrapeLine = `Last on-demand scrape ${hhmm(scrape.last.at)
     {summary && (
       <p class="hint">
         {summary.listingCount} listings, {summary.qualifyingCount} qualifying, {summary.flaggedCount > 0 ? `⚠ ${summary.flaggedCount} flagged` : "0 flagged"}.
-        {" "}<a href={`/?product=${encodeURIComponent(slug)}`}>Deals →</a>
+        {" "}<a href={`/deals/${encodeURIComponent(slug)}`}>Deals →</a>
       </p>
     )}
 

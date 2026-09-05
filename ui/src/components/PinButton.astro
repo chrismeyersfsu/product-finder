@@ -1,0 +1,41 @@
+---
+/** Pin / unpin a listing — the opposite of Hide: a pinned listing
+ * floats to the top of a results page, in its own "Pinned" bucket,
+ * rather than leaving the list. A real form post to /api/pin (works
+ * with JavaScript off: the server redirects back to `back`); with JS
+ * the submit is intercepted, posted with fetch, and the page reloads
+ * in place (a pin/unpin moves the row between buckets, unlike Hide's
+ * simple row removal, so there's no in-place DOM edit that makes
+ * sense here). */
+interface Props { id: number; pinned: boolean; back: string }
+const { id, pinned, back } = Astro.props;
+---
+<form class="pin-form" method="post" action="/api/pin">
+  <input type="hidden" name="id" value={id} />
+  <input type="hidden" name="pinned" value={pinned ? "0" : "1"} />
+  <input type="hidden" name="back" value={back} />
+  <button type="submit" class="btn-ghost" title={pinned ? "Unpin this listing" : "Pin this listing to the top"}>
+    {pinned ? "Unpin" : "Pin"}
+  </button>
+</form>
+<script>
+  document.addEventListener("submit", async (e) => {
+    const form = e.target as HTMLFormElement | null;
+    if (!form?.classList.contains("pin-form")) return;
+    e.preventDefault();
+    const btn = form.querySelector("button");
+    if (btn) btn.disabled = true;
+    try {
+      const res = await fetch(form.action, {
+        method: "POST",
+        body: new FormData(form),
+        headers: { accept: "application/json" },
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      location.reload(); // pin/unpin moves the row between buckets
+    } catch {
+      if (btn) btn.disabled = false;
+      form.submit(); // fall back to the full-page path
+    }
+  });
+</script>

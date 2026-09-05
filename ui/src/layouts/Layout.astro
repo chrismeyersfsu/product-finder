@@ -1,22 +1,39 @@
 ---
-/** Page shell: nav, theme tokens, and the shared tooltip layer.
- * The tooltip layer is delegated: any element with data-tip-value /
- * data-tip-label gets a hover+focus tooltip; content is inserted with
- * textContent only (labels are untrusted data). `refreshSeconds` is an
- * opt-in <meta http-equiv="refresh">, for pages (Monitor) that only
- * want it while something's actively happening. */
+/** Page shell: jQuery-Mobile-style header bar + off-canvas nav panel,
+ * theme tokens, and the shared tooltip layer. The tooltip layer is
+ * delegated: any element with data-tip-value / data-tip-label gets a
+ * hover+focus tooltip; content is inserted with textContent only
+ * (labels are untrusted data).
+ *
+ * Header bar: a hamburger (opens the nav panel) on the left by
+ * default, or a `back` link when the page supplies one (the deals
+ * results page uses this instead of the hamburger); an optional
+ * `action` link on the right. Nav entries live in ONE array (NAV)
+ * below — add a page there and it shows up in the panel everywhere.
+ *
+ * The panel is a native <details>: fully usable with JavaScript off
+ * (the summary/hamburger opens and closes it, every link inside is a
+ * real href); a small script only adds Esc-to-close on top of that.
+ */
 import "../styles/global.css";
-interface Props { title: string; active: string; product?: string | undefined; refreshSeconds?: number | undefined }
-const { title, active, product, refreshSeconds } = Astro.props;
-const q = product ? `?product=${encodeURIComponent(product)}` : "";
-const tabs = [
-  ["/", "Deals", "deals"],
-  ["/history", "History", "history"],
-  ["/hidden", "Hidden", "hidden"],
-  ["/backtests", "Backtests", "backtests"],
-  ["/sites", "Sites", "sites"],
-  ["/products", "Products", "products"],
-  ["/monitor", "Monitor", "monitor"],
+interface Props {
+  title: string;
+  active: string;
+  back?: { href: string; label: string } | undefined;
+  action?: { href: string; label: string } | undefined;
+  /** Seconds between auto-refreshes (a <meta http-equiv="refresh">),
+   * for pages like Monitor that want to poll without client JS. */
+  refreshSeconds?: number | undefined;
+}
+const { title, active, back, action, refreshSeconds } = Astro.props;
+/** Single source of truth for the off-canvas nav. Add a row here to
+ * add a page to the menu everywhere. */
+const NAV: { href: string; label: string; key: string }[] = [
+  { href: "/", label: "Products", key: "home" },
+  { href: "/hidden", label: "Hidden", key: "hidden" },
+  { href: "/sites", label: "Sites", key: "sites" },
+  { href: "/monitor", label: "Monitor", key: "monitor" },
+  { href: "/products", label: "Manage products", key: "manage" },
 ];
 ---
 <html lang="en">
@@ -27,18 +44,51 @@ const tabs = [
     <title>{title} · product-finder</title>
   </head>
   <body>
+    <header class="jqm-header">
+      <div class="hdr-left">
+        {back ? (
+          <a class="hdr-btn back-btn" href={back.href}>‹ {back.label}</a>
+        ) : (
+          <details class="panel-root">
+            <summary class="hdr-btn hamburger" aria-label="Menu"><span class="ham-icon"></span></summary>
+            <a class="panel-overlay" href="#" tabindex="-1" aria-hidden="true" onclick="this.closest('details').open=false;return false;"></a>
+            <nav class="panel" aria-label="Site menu">
+              <div class="panel-head">
+                <span>Menu</span>
+                <a class="panel-close" href="#" aria-label="Close menu" onclick="this.closest('details').open=false;return false;">✕</a>
+              </div>
+              <ul class="listview">
+                {NAV.map((item) => (
+                  <li>
+                    <a class="ui-li" href={item.href} aria-current={active === item.key ? "page" : undefined}>
+                      <span class="ui-li-text">{item.label}</span>
+                      <span class="ui-li-chevron">›</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          </details>
+        )}
+      </div>
+      <h1>{title}</h1>
+      <div class="hdr-right">
+        {action && <a class="hdr-btn action-btn" href={action.href}>{action.label}</a>}
+      </div>
+    </header>
     <div class="shell">
-      <header class="top">
-        <h1>product-finder</h1>
-        <nav>
-          {tabs.map(([href, label, key]) => (
-            <a href={`${href}${key === "backtests" || key === "sites" || key === "products" || key === "monitor" ? "" : q}`} aria-current={active === key ? "page" : undefined}>{label}</a>
-          ))}
-        </nav>
-      </header>
       <slot />
     </div>
     <div id="tooltip" role="status"></div>
+    <script>
+      // Panel: Esc closes it; the overlay/close-button onclick handlers
+      // above already work with JavaScript off (native <details>).
+      document.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        const open = document.querySelector("details.panel-root[open]");
+        if (open) (open as HTMLDetailsElement).open = false;
+      });
+    </script>
     <script>
       const tip = document.getElementById("tooltip")!;
       function show(el: Element, x: number, y: number) {
@@ -103,7 +153,7 @@ const tabs = [
         th.setAttribute("aria-sort", dir);
         const key = (row: HTMLTableRowElement): number | string | null => {
           const text = (row.cells[idx]?.textContent ?? "").trim();
-          if (text === "" || text === "\u2014") return null;
+          if (text === "" || text === "—") return null;
           if (!numeric) return text.toLowerCase();
           const n = parseFloat(text.replace(/[$,]/g, ""));
           return Number.isNaN(n) ? null : n;
@@ -147,7 +197,7 @@ const tabs = [
           for (const dir of (numeric ? ["descending", "ascending"] : ["ascending", "descending"]) as Dir[]) {
             const opt = document.createElement("option");
             opt.value = `${i}:${dir}`;
-            opt.textContent = `${name} ${dir === "ascending" ? "\u2191" : "\u2193"}`;
+            opt.textContent = `${name} ${dir === "ascending" ? "↑" : "↓"}`;
             if (th.getAttribute("aria-sort") === dir) opt.selected = true;
             sel.appendChild(opt);
           }

@@ -14,11 +14,10 @@ const saved = Astro.url.searchParams.get("saved");
 const deleted = Astro.url.searchParams.get("deleted");
 const scrapes = scrapeStatuses();
 ---
-<Layout title="Products" active="products">
+<Layout title="Manage products" active="manage" action={{ href: "/products/new", label: "+" }}>
   {!db.hasDb() && <EmptyState what="database" tool="seed_defaults" />}
   {saved && <p class="banner">Saved "{saved}".</p>}
   {deleted && <p class="banner">Deleted "{deleted}".</p>}
-  <p class="actions-row"><a class="btn" href="/products/new">New product</a></p>
 
   {products.length === 0 ? (
     <EmptyState what="products" tool="seed_defaults" />
@@ -49,7 +48,7 @@ const scrapes = scrapeStatuses();
                   {scrapes.get(p.slug)?.runningSince && <span class="scrape-tag">running</span>}
                   {!scrapes.get(p.slug)?.runningSince && scrapes.get(p.slug)?.queued && <span class="scrape-tag">queued</span>}
                 </td>
-                <td class="c-wide" data-label="Deals"><a href={`/?product=${encodeURIComponent(p.slug)}`}>Deals →</a></td>
+                <td class="c-wide" data-label="Deals"><a href={`/deals/${encodeURIComponent(p.slug)}`}>Deals →</a></td>
               </tr>
             ))}
           </tbody>
