@@ -323,9 +323,41 @@ form.product .actions button[type="submit"] {
 }
 form.product .note { font-size: 12px; color: var(--text-muted); margin-top: 12px; }
 
+/* Advanced section (sites/manual checks/criteria/extractors), collapsed
+   by default on the full ProductForm */
+form.product details.advanced { margin-bottom: 16px; }
+form.product details.advanced summary {
+  cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-secondary);
+  padding: 6px 0; list-style: none;
+}
+form.product details.advanced summary::-webkit-details-marker { display: none; }
+form.product details.advanced summary::before {
+  content: "\25B8"; display: inline-block; width: 1em; margin-right: 4px; color: var(--text-muted);
+  transition: transform 0.1s;
+}
+form.product details.advanced[open] summary::before { transform: rotate(90deg); }
+form.product details.advanced .field:first-of-type { margin-top: 12px; }
+form.product details.advanced .field:last-of-type { margin-bottom: 0; }
+
 .delete-form { margin: 0; }
 .btn-danger {
   background: transparent; color: var(--status-critical); border: 1px solid var(--status-critical);
   border-radius: 6px; padding: 7px 16px; font: inherit; cursor: pointer;
 }
 .btn-danger:hover { background: color-mix(in oklab, var(--status-critical) 10%, transparent); }
+
+/* Scrape-now button + status line on the product edit page */
+.scrape-block { display: flex; align-items: center; gap: 12px; margin: 0 0 16px; }
+.scrape-block form { margin: 0; }
+.scrape-block .hint { margin: 0; }
+.btn-scrape {
+  background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+  padding: 7px 14px; font: inherit; cursor: pointer;
+}
+.btn-scrape:hover { opacity: 0.92; }
+
+/* "queued"/"running" marker next to Last seen on the products list */
+.scrape-tag {
+  display: inline-block; margin-left: 6px; font-size: 11px; padding: 1px 6px; border-radius: 10px;
+  background: color-mix(in oklab, var(--accent) 15%, var(--surface-1)); color: var(--accent);
+}

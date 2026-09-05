@@ -1,6 +1,24 @@
-"""Scrape summary contract: per-site report, exit-worthy only on total failure."""
+"""Scrape summary contract: per-site report, exit-worthy only on total failure.
 
-from product_finder_mcp.scrape import summarize
+The queue tests below are pure/unit: server.rescore_product and
+server.run_search are monkeypatched (no network, no real scrape
+pipeline) and PF_DB points at a tmp_path db so server.add_product /
+storage.get_product see real product rows.
+"""
+
+import os
+import time
+from pathlib import Path
+
+import pytest
+from product_finder_mcp import scrape, server
+from product_finder_mcp.scrape import process_requests, queue_dir, summarize
+
+
+@pytest.fixture
+def tmp_db(tmp_path, monkeypatch):
+    monkeypatch.setenv("PF_DB", str(tmp_path / "t.db"))
+    return tmp_path
 
 
 def test_mixed_results_not_total_failure():
@@ -45,3 +63,228 @@ def test_rescore_counts_lead_the_product_line():
     )
     assert not fail
     assert "laptop: rescored 40 (dropped 2); stored 5 (newegg:5); 0 site errors" in text
+
+
+# -- queue_dir() -------------------------------------------------------------
+
+
+def test_queue_dir_derives_from_pf_db(monkeypatch):
+    monkeypatch.delenv("PF_SCRAPE_QUEUE", raising=False)
+    monkeypatch.setenv("PF_DB", "/srv/product-finder/data/product_finder.db")
+    assert queue_dir() == Path("/srv/product-finder/data/scrape-now")
+
+
+def test_queue_dir_env_override_wins(monkeypatch):
+    monkeypatch.setenv("PF_DB", "/srv/product-finder/data/product_finder.db")
+    monkeypatch.setenv("PF_SCRAPE_QUEUE", "/other/queue")
+    assert queue_dir() == Path("/other/queue")
+
+
+def test_queue_dir_falls_back_without_pf_db(monkeypatch):
+    monkeypatch.delenv("PF_SCRAPE_QUEUE", raising=False)
+    monkeypatch.delenv("PF_DB", raising=False)
+    assert queue_dir() == Path("data/scrape-now")
+
+
+# -- process_requests() -------------------------------------------------------
+
+
+def _touch(path, mtime_offset=0):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.touch()
+    if mtime_offset:
+        t = time.time() + mtime_offset
+        os.utime(path, (t, t))
+
+
+def test_empty_queue_is_a_noop(tmp_path):
+    base = tmp_path / "scrape-now"
+    assert process_requests(base) == {}
+    assert (base / "queue").is_dir()
+    assert (base / "running").is_dir()
+    assert (base / "done").is_dir()
+
+
+def test_processes_queued_slugs_in_mtime_order_and_empties_queue(tmp_db, monkeypatch):
+    server.add_product("alpha", "Alpha")
+    server.add_product("beta", "Beta")
+    base = tmp_db / "scrape-now"
+    # beta queued first (older mtime) even though created second on disk
+    _touch(base / "queue" / "alpha", mtime_offset=10)
+    _touch(base / "queue" / "beta", mtime_offset=0)
+
+    order = []
+
+    def fake_rescore(slug):
+        order.append(slug)
+        return {"rescored": 1, "rejected": 0, "valued": 0}
+
+    def fake_run_search(slug):
+        return {"stored": 1, "per_site": {"site": 1}, "errors": {}}
+
+    monkeypatch.setattr(server, "rescore_product", fake_rescore)
+    monkeypatch.setattr(server, "run_search", fake_run_search)
+
+    runs = process_requests(base)
+
+    assert order == ["beta", "alpha"]
+    assert set(runs) == {"alpha", "beta"}
+    assert runs["alpha"]["stored"] == 1
+    assert list((base / "queue").iterdir()) == []
+
+
+def test_running_marker_present_during_and_removed_after(tmp_db, monkeypatch):
+    server.add_product("alpha", "Alpha")
+    base = tmp_db / "scrape-now"
+    _touch(base / "queue" / "alpha")
+
+    seen_running = {}
+
+    def fake_run_search(slug):
+        seen_running["during"] = (base / "running" / slug).exists()
+        return {"stored": 0, "per_site": {}, "errors": {}}
+
+    monkeypatch.setattr(
+        server, "rescore_product", lambda slug: {"rescored": 0, "rejected": 0, "valued": 0}
+    )
+    monkeypatch.setattr(server, "run_search", fake_run_search)
+
+    process_requests(base)
+
+    assert seen_running["during"] is True
+    assert not (base / "running" / "alpha").exists()
+
+
+def test_unknown_product_deletes_queue_file_and_writes_no_product(tmp_db, monkeypatch):
+    base = tmp_db / "scrape-now"
+    _touch(base / "queue" / "ghost")
+
+    called = []
+    monkeypatch.setattr(server, "rescore_product", lambda slug: called.append(slug))
+    monkeypatch.setattr(server, "run_search", lambda slug: called.append(slug))
+
+    runs = process_requests(base)
+
+    assert called == []
+    assert runs == {"ghost": {"error": "no product"}}
+    assert not (base / "queue" / "ghost").exists()
+    assert not (base / "running" / "ghost").exists()
+    assert (base / "done" / "ghost").read_text().strip() == "ghost: no product"
+
+
+def test_ignores_junk_filenames(tmp_db):
+    base = tmp_db / "scrape-now"
+    _touch(base / "queue" / ".hidden")
+    _touch(base / "queue" / "Not_A_Slug!")
+    _touch(base / "queue" / "UPPER")
+
+    runs = process_requests(base)
+
+    assert runs == {}
+    remaining = {p.name for p in (base / "queue").iterdir()}
+    assert remaining == {".hidden", "Not_A_Slug!", "UPPER"}
+
+
+def test_done_file_matches_summarize_output(tmp_db, monkeypatch):
+    server.add_product("alpha", "Alpha")
+    base = tmp_db / "scrape-now"
+    _touch(base / "queue" / "alpha")
+
+    monkeypatch.setattr(
+        server, "rescore_product", lambda slug: {"rescored": 3, "rejected": 1, "valued": 0}
+    )
+    monkeypatch.setattr(
+        server,
+        "run_search",
+        lambda slug: {"stored": 2, "per_site": {"ebay": 2}, "errors": {"newegg": "HTTP 500"}},
+    )
+
+    runs = process_requests(base)
+    expected_text, _ = summarize({"alpha": runs["alpha"]})
+    assert (base / "done" / "alpha").read_text() == expected_text + "\n"
+    assert "alpha: rescored 3 (dropped 1); stored 2 (ebay:2); 1 site errors" in expected_text
+    assert "newegg: HTTP 500" in expected_text
+
+
+def test_new_request_arriving_mid_run_is_also_drained(tmp_db, monkeypatch):
+    server.add_product("alpha", "Alpha")
+    server.add_product("beta", "Beta")
+    base = tmp_db / "scrape-now"
+    _touch(base / "queue" / "alpha")
+
+    def fake_run_search(slug):
+        if slug == "alpha":
+            # simulate a second request landing while alpha is processed
+            _touch(base / "queue" / "beta")
+        return {"stored": 0, "per_site": {}, "errors": {}}
+
+    monkeypatch.setattr(
+        server, "rescore_product", lambda slug: {"rescored": 0, "rejected": 0, "valued": 0}
+    )
+    monkeypatch.setattr(server, "run_search", fake_run_search)
+
+    runs = process_requests(base)
+
+    assert set(runs) == {"alpha", "beta"}
+    assert list((base / "queue").iterdir()) == []
+
+
+# -- main() --requested routing -----------------------------------------------
+
+
+def test_main_requested_empty_queue_prints_message_and_returns(monkeypatch, capsys):
+    monkeypatch.setattr(scrape, "process_requests", lambda: {})
+    scrape.main(["--requested"])
+    assert "no scrape requests queued" in capsys.readouterr().out
+
+
+def test_main_requested_routes_to_process_requests_and_prints_summary(monkeypatch, capsys):
+    monkeypatch.setattr(
+        scrape,
+        "process_requests",
+        lambda: {"alpha": {"stored": 4, "per_site": {"ebay": 4}, "errors": {}}},
+    )
+    scrape.main(["--requested"])
+    assert "alpha: stored 4 (ebay:4); 0 site errors" in capsys.readouterr().out
+
+
+def test_main_requested_exits_1_on_total_failure(monkeypatch, capsys):
+    monkeypatch.setattr(
+        scrape,
+        "process_requests",
+        lambda: {"alpha": {"stored": 0, "per_site": {}, "errors": {"ebay": "403"}}},
+    )
+    with pytest.raises(SystemExit) as exc:
+        scrape.main(["--requested"])
+    assert exc.value.code == 1
+
+
+def test_main_without_flag_still_scrapes_all_products(tmp_db, capsys):
+    scrape.main([])
+    assert "no products configured; nothing to scrape" in capsys.readouterr().out
+
+
+def test_a_crashing_request_is_recorded_and_the_queue_keeps_draining(tmp_path, monkeypatch):
+    monkeypatch.setenv("PF_DB", str(tmp_path / "x.db"))
+    base = tmp_path / "scrape-now"
+    (base / "queue").mkdir(parents=True)
+    (base / "queue" / "boom").write_text("")
+    (base / "queue" / "fine").write_text("")
+    os.utime(base / "queue" / "boom", (1, 1))
+    monkeypatch.setattr(scrape.storage, "get_product", lambda conn, slug: {"slug": slug})
+    monkeypatch.setattr(scrape.server, "_connect", lambda: None)
+    monkeypatch.setattr(
+        scrape.server, "rescore_product", lambda slug: {"rescored": 0, "rejected": 0}
+    )
+
+    def run_search(slug):
+        if slug == "boom":
+            raise RuntimeError("browser died")
+        return {"stored": 1, "per_site": {"ebay": 1}, "errors": {}}
+
+    monkeypatch.setattr(scrape.server, "run_search", run_search)
+    runs = scrape.process_requests(base)
+    assert runs["boom"] == {"error": "RuntimeError: browser died"}
+    assert runs["fine"]["stored"] == 1
+    assert (base / "done" / "boom").read_text() == "boom: RuntimeError: browser died\n"
+    assert not list((base / "queue").iterdir()) and not list((base / "running").iterdir())

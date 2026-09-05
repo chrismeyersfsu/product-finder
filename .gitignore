@@ -6,3 +6,6 @@ dist/
 *.db
 *.db-wal
 *.db-shm
+
+# runtime data dir (db + scrape-now queue), bind-mounted into the containers
+/data/

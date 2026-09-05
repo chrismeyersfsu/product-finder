@@ -1,0 +1,25 @@
+# On-demand job (see product-finder-scrape-now.path): triggered when the
+# dashboard drops a request into data/scrape-now/queue/, not on a
+# schedule. No [Install] section on purpose — the path unit starts it,
+# not boot. Drains the whole queue each run (see scrape.process_requests),
+# so a burst of "scrape now" clicks collapses into one run; SQLite WAL
+# plus the storage layer's busy_timeout are the cross-container backstop
+# while the mcp service holds the same db.
+[Unit]
+Description=Product Finder on-demand scrape (dashboard 'Scrape now' requests)
+
+[Container]
+Image=localhost/product-finder:latest
+ContainerName=product-finder-scrape-now
+Network=host
+Volume=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data:/home/cmeyers/github.com/chrismeyersfsu/product-finder/data:Z
+Environment=PF_DB=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data/product_finder.db
+# API keys (EBAY_*, KROGER_*, BESTBUY_API_KEY, FB_COOKIES...) live outside git;
+# install.sh creates the file (mode 600) before the units start.
+EnvironmentFile=/home/cmeyers/.config/product-finder/secrets.env
+Exec=product-finder-scrape --requested
+
+[Service]
+Type=oneshot
+# generous ceiling so a hung site or browser render can't wedge the queue forever
+TimeoutStartSec=30min

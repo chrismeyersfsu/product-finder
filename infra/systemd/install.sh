@@ -55,6 +55,9 @@ if [[ ! -f "$REPO/data/product_finder.db" && -f "$REPO/product_finder.db" ]]; th
     done
     echo "migrated repo-root db into data/"
 fi
+# On-demand "scrape now" request queue the dashboard writes into and
+# product-finder-scrape-now.path watches (see scrape.queue_dir()).
+mkdir -p "$REPO/data/scrape-now/queue" "$REPO/data/scrape-now/running" "$REPO/data/scrape-now/done"
 
 echo "== secrets =="
 # Site API keys are read by the scrape and mcp containers from this
@@ -116,12 +119,12 @@ fi
 # Stale host-process units would shadow the quadlet generator.
 rm -f "$UNIT_DIR"/product-finder-ui.service "$UNIT_DIR"/product-finder-mcp.service
 cp ./*.container "$QUADLET_DIR/"
-cp ./*.service ./*.timer "$UNIT_DIR/"
+cp ./*.service ./*.timer ./*.path "$UNIT_DIR/"
 systemctl --user daemon-reload
 loginctl enable-linger "$USER" || true
 
 echo "== starting services =="
-systemctl --user enable --now product-finder-tunnel.service product-finder-scrape.timer
+systemctl --user enable --now product-finder-tunnel.service product-finder-scrape.timer product-finder-scrape-now.path
 # Skip the restarts when nothing a running service consumes has changed:
 # the images or the unit files.
 INFRA_HASH=$( (cd "$REPO" && find infra/systemd -type f -print0 \
@@ -137,4 +140,5 @@ fi
 
 systemctl --user --no-pager --plain list-units 'product-finder-*'
 echo "Timer: systemctl --user list-timers product-finder-scrape.timer"
+echo "On-demand: systemctl --user status product-finder-scrape-now.path"
 echo "Done. Dashboard: https://$TUNNEL_HOST"

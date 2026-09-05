@@ -1,0 +1,7 @@
+[Unit]
+Description=Run requested scrapes when the dashboard queues one
+[Path]
+DirectoryNotEmpty=/home/cmeyers/github.com/chrismeyersfsu/product-finder/data/scrape-now/queue
+MakeDirectory=yes
+[Install]
+WantedBy=default.target

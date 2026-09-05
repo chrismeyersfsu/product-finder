@@ -1,8 +1,14 @@
 ---
-/** The product create/edit form. Pure presentation — the page
- * handles the POST itself (validate, save, redirect) and passes back
- * `values`/`errors` to re-render on failure. Renders every field as a
- * plain input/textarea so it works with JavaScript off. */
+/** The product create/edit form (the "advanced" flow — the simple
+ * one-field flow lives on /products/new). Pure presentation — the
+ * page handles the POST itself (validate, save, redirect) and passes
+ * back `values`/`errors` to re-render on failure. Renders every field
+ * as a plain input/textarea so it works with JavaScript off. Basics
+ * (slug, name, description, max price, queries) are always visible;
+ * sites/manual checks/criteria/extractors sit inside a collapsed
+ * <details>, open only when an error mentions one of those fields or
+ * `?advanced=1` is set — the same query param /products/new uses to
+ * switch from the simple form to this one. */
 import type { SiteRow } from "../lib/db";
 
 interface FormValues {
@@ -24,6 +30,9 @@ interface Props {
   slugLocked?: boolean;
 }
 const { action, values, errors, siteRows, slugLocked } = Astro.props;
+
+const advancedOpen =
+  Astro.url.searchParams.get("advanced") === "1" || errors.some((e) => /site|criteria|extractors/i.test(e));
 ---
 <form class="product" method="post" action={action}>
   {errors.length > 0 && (
@@ -44,11 +53,10 @@ const { action, values, errors, siteRows, slugLocked } = Astro.props;
         name="slug"
         value={values.slug}
         pattern={"[a-z0-9][a-z0-9-]{1,63}"}
-        placeholder="e.g. gpu-4080"
-        required
+        placeholder="auto from name"
       />
     )}
-    <span class="hint">Lowercase letters, digits, and hyphens. Fixed once the product is created.</span>
+    <span class="hint">Lowercase letters, digits, and hyphens. Leave blank to generate from the name. Fixed once the product is created.</span>
   </div>
 
   <div class="field">
@@ -69,55 +77,59 @@ const { action, values, errors, siteRows, slugLocked } = Astro.props;
   </div>
 
   <div class="field">
-    <label for="pf-queries">Search queries <span class="hint">one per line, at least one required</span></label>
-    <textarea id="pf-queries" name="queries" rows="4" required>{values.queries}</textarea>
+    <label for="pf-queries">Search queries <span class="hint">one per line — leave blank to default to the product name</span></label>
+    <textarea id="pf-queries" name="queries" rows="4" placeholder="auto from name">{values.queries}</textarea>
   </div>
 
-  <div class="field">
-    <label for="pf-manual-checks">Manual checks <span class="hint">one per line — shown on Deals as "verify by hand before buying"</span></label>
-    <textarea id="pf-manual-checks" name="manual_checks" rows="3">{values.manual_checks}</textarea>
-  </div>
+  <details class="advanced" open={advancedOpen}>
+    <summary>Advanced — sites, manual checks, criteria, extractors</summary>
 
-  <div class="field">
-    <label>Sites <span class="hint">unchecked = every enabled site</span></label>
-    <div class="site-grid">
-      {siteRows.map((s) => (
-        <label class:list={["site-opt", { disabled: !s.enabled }]}>
-          <input type="checkbox" name="sites" value={s.slug} checked={values.sites.includes(s.slug)} />
-          <span class="site-name">{s.name} <span class="hint">({s.slug}{!s.enabled ? ", disabled" : ""})</span></span>
-        </label>
-      ))}
+    <div class="field">
+      <label>Sites <span class="hint">unchecked = every enabled site</span></label>
+      <div class="site-grid">
+        {siteRows.map((s) => (
+          <label class:list={["site-opt", { disabled: !s.enabled }]}>
+            <input type="checkbox" name="sites" value={s.slug} checked={values.sites.includes(s.slug)} />
+            <span class="site-name">{s.name} <span class="hint">({s.slug}{!s.enabled ? ", disabled" : ""})</span></span>
+          </label>
+        ))}
+      </div>
     </div>
-  </div>
 
-  <div class="field">
-    <label for="pf-criteria">Criteria <span class="hint">JSON array of rule objects</span></label>
-    <textarea id="pf-criteria" name="criteria" class="mono" rows="12" spellcheck="false">{values.criteria}</textarea>
-    <span class="hint">
-      Ops: gte, lte, eq, contains, one_of, matches, exists (value is required unless op is exists; one_of's value
-      must be an array). <code>required</code> = hard fail — the row is excluded from Deals unless "include hard
-      fails" is on; <code>reject</code> = the listing is dropped entirely at ingest, never stored; <code>flag</code>
-      = the listing is kept but shown with a ⚠ note on the row. Example rule: field price, op gte, value 50,
-      required true.
-    </span>
-  </div>
+    <div class="field">
+      <label for="pf-manual-checks">Manual checks <span class="hint">one per line — shown on Deals as "verify by hand before buying"</span></label>
+      <textarea id="pf-manual-checks" name="manual_checks" rows="3">{values.manual_checks}</textarea>
+    </div>
 
-  <div class="field">
-    <label for="pf-extractors">Extractors <span class="hint">JSON object, name → spec</span></label>
-    <textarea id="pf-extractors" name="extractors" class="mono" rows="12" spellcheck="false">{values.extractors}</textarea>
-    <span class="hint">
-      <code>pattern</code> runs as a Python <code>re</code> pattern (case-insensitive) — this form only checks it
-      compiles as a JavaScript regex, as a proxy. <code>type</code> is int, float, str, bool, or size_gb. Optional
-      <code>group</code> (regex capture group, ≥ 0) and <code>fields</code> (which listing fields to search, e.g.
-      ["title", "condition"] — default is the title alone).
-    </span>
-  </div>
+    <div class="field">
+      <label for="pf-criteria">Criteria <span class="hint">JSON array of rule objects</span></label>
+      <textarea id="pf-criteria" name="criteria" class="mono" rows="12" spellcheck="false">{values.criteria}</textarea>
+      <span class="hint">
+        Ops: gte, lte, eq, contains, one_of, matches, exists (value is required unless op is exists; one_of's value
+        must be an array). <code>required</code> = hard fail — the row is excluded from Deals unless "include hard
+        fails" is on; <code>reject</code> = the listing is dropped entirely at ingest, never stored; <code>flag</code>
+        = the listing is kept but shown with a ⚠ note on the row. Example rule: field price, op gte, value 50,
+        required true.
+      </span>
+    </div>
+
+    <div class="field">
+      <label for="pf-extractors">Extractors <span class="hint">JSON object, name → spec</span></label>
+      <textarea id="pf-extractors" name="extractors" class="mono" rows="12" spellcheck="false">{values.extractors}</textarea>
+      <span class="hint">
+        <code>pattern</code> runs as a Python <code>re</code> pattern (case-insensitive) — this form only checks it
+        compiles as a JavaScript regex, as a proxy. <code>type</code> is int, float, str, bool, or size_gb. Optional
+        <code>group</code> (regex capture group, ≥ 0) and <code>fields</code> (which listing fields to search, e.g.
+        ["title", "condition"] — default is the title alone).
+      </span>
+    </div>
+  </details>
 
   <div class="actions">
     <button type="submit">Save</button>
   </div>
   <p class="note">
-    New products are first scraped on the next hourly run (or <code>run_search</code> over MCP). Edited extractors
-    and criteria are re-applied to stored listings on the next hourly run.
+    New products are first scraped on the next hourly run (or "Scrape now" / <code>run_search</code> over MCP).
+    Edited extractors and criteria are re-applied to stored listings on the next hourly run.
   </p>
 </form>

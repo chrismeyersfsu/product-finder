@@ -1,17 +1,22 @@
 ---
-/** Create a product. Handles its own POST: same-origin check, parse +
- * validate, on error re-render the form with every error and the
- * submitted values (no JS needed), on success save and redirect to
- * the list with a confirmation. */
+/** Create a product. Two views of the same POST handler: the default
+ * simple form (just a Name — slug and search query are derived) and,
+ * at ?advanced=1, the full ProductForm. Handles its own POST:
+ * same-origin check, parse + validate, on error re-render whichever
+ * view was submitted with every error and the submitted values (no JS
+ * needed), on success save, queue the first scrape, and redirect to
+ * the new product's own page with a confirmation banner. */
 export const prerender = false;
 import ProductForm from "../../components/ProductForm.astro";
 import Layout from "../../layouts/Layout.astro";
 import * as db from "../../lib/db";
 import { formDefaults, parseProductForm, saveProduct } from "../../lib/products";
 import { sameOrigin } from "../../lib/request";
+import { enqueueScrape } from "../../lib/scrapeQueue";
 
 const siteRows = db.listSites();
 const knownSites = siteRows.map((s) => s.slug);
+const advanced = Astro.url.searchParams.get("advanced") === "1";
 
 let values = formDefaults();
 let errors: string[] = [];
@@ -26,7 +31,10 @@ if (Astro.request.method === "POST") {
   }
   if (errors.length === 0) {
     saveProduct(parsed.product);
-    return Astro.redirect(`/products?saved=${encodeURIComponent(parsed.product.slug)}`, 303);
+    return Astro.redirect(
+      `/products/${encodeURIComponent(parsed.product.slug)}?created=1&queued=${enqueueScrape(parsed.product.slug) ? 1 : 0}`,
+      303
+    );
   }
   values = formDefaults(parsed.product);
 }
@@ -34,6 +42,28 @@ if (Astro.request.method === "POST") {
 <Layout title="New product" active="products">
   <div class="card">
     <h2>New product</h2>
-    <ProductForm action="/products/new" values={values} errors={errors} siteRows={siteRows} />
+    {advanced ? (
+      <ProductForm action="/products/new?advanced=1" values={values} errors={errors} siteRows={siteRows} />
+    ) : (
+      <form class="product simple" method="post" action="/products/new">
+        {errors.length > 0 && (
+          <div class="errors">
+            <h2>Fix the following before saving:</h2>
+            <ul>{errors.map((e) => <li>{e}</li>)}</ul>
+          </div>
+        )}
+        <div class="field">
+          <label for="pf-name">Name</label>
+          <input id="pf-name" type="text" name="name" value={values.name} placeholder="e.g. Jeep Wrangler" required autofocus />
+          <span class="hint">Slug and search query are generated from the name; everything else can be tuned later on the product page.</span>
+        </div>
+        <div class="actions">
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    )}
+    <p class="hint">
+      {advanced ? <a href="/products/new">Simple form</a> : <a href="/products/new?advanced=1">Advanced form</a>}
+    </p>
   </div>
 </Layout>

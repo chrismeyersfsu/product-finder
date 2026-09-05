@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.20.0 — 2026-09-04
+
+- New product needs only a name: slug and search query are derived
+  from it and the first scrape is queued at once; the full form is
+  behind an Advanced link. The edit page keeps the basics on top and
+  folds sites, manual checks, criteria and extractors into an Advanced
+  section.
+- **Scrape now** on a product page queues an immediate scrape of that
+  product (`product-finder-scrape --requested`, started by a systemd
+  path unit watching `data/scrape-now/queue/`); the page shows queued
+  / running / last result.
+
 ## 0.19.0 — 2026-09-04
 
 - Products page (`/products`): list every product with its listing

@@ -52,9 +52,12 @@ export interface ProductInput {
   max_price: number | null;
 }
 
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
+export const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
 
-function dbPath(): string | null {
+/** Resolves the product-finder sqlite file (PF_DB in production).
+ * Exported so scrapeQueue.ts can derive the scrape-now directory from
+ * the same path without duplicating the search order. */
+export function dbPath(): string | null {
   const candidates = [
     process.env.PF_DB,
     path.resolve(process.cwd(), "product_finder.db"),
@@ -62,6 +65,20 @@ function dbPath(): string | null {
   ].filter((p): p is string => !!p);
   for (const p of candidates) if (fs.existsSync(p)) return p;
   return null;
+}
+
+/** Derives a slug from a product name for the simple add flow:
+ * lowercase, every run of non `[a-z0-9]` collapsed to one hyphen,
+ * leading/trailing hyphens trimmed, capped at 64 chars (trimming a
+ * trailing hyphen again after the cap). Pure; may still return a
+ * string too short to pass SLUG_RE, which the caller must check. */
+export function slugify(name: string): string {
+  let s = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (s.length > 64) s = s.slice(0, 64).replace(/-+$/g, "");
+  return s;
 }
 
 function lines(v: FormDataEntryValue | null): string[] {
@@ -80,7 +97,10 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
  * stopping at the first, so the caller can re-render them all at once.
  * `opts.slugLocked` fixes the slug for an edit (the form's slug field,
  * if any, is ignored); `opts.knownSites` is the roster the `sites`
- * checkboxes are validated against. */
+ * checkboxes are validated against. On create, a blank slug is
+ * derived from the name via slugify(); a blank queries list defaults
+ * to [name] — this is what makes the simple ("just a name") and
+ * advanced forms interchangeable submissions to the same handler. */
 export function parseProductForm(
   form: FormData,
   opts: { slugLocked?: string; knownSites?: string[] } = {}
@@ -88,16 +108,24 @@ export function parseProductForm(
   const errors: string[] = [];
   const knownSites = opts.knownSites ?? [];
 
-  const slug = opts.slugLocked ?? String(form.get("slug") ?? "").trim();
-  if (!SLUG_RE.test(slug))
-    errors.push("slug must be lowercase letters, digits, and hyphens (2-64 chars), starting with a letter or digit");
-
   const name = String(form.get("name") ?? "").trim();
   if (!name) errors.push("name is required");
 
+  const rawSlug = opts.slugLocked ?? String(form.get("slug") ?? "").trim();
+  const derivingSlug = !opts.slugLocked && !rawSlug;
+  const slug = derivingSlug ? slugify(name) : rawSlug;
+  if (!SLUG_RE.test(slug)) {
+    errors.push(
+      derivingSlug
+        ? "could not make a slug from that name — enter one"
+        : "slug must be lowercase letters, digits, and hyphens (2-64 chars), starting with a letter or digit"
+    );
+  }
+
   const description = String(form.get("description") ?? "").trim();
 
-  const queries = lines(form.get("queries"));
+  let queries = lines(form.get("queries"));
+  if (queries.length === 0 && name) queries = [name];
   if (queries.length === 0) errors.push("at least one query is required");
 
   const manual_checks = lines(form.get("manual_checks"));

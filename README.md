@@ -201,8 +201,9 @@ Example, over MCP: `run_backtest("thin-client-laptop")`, later
 ## Dashboard UI
 
 An Astro (SSR) dashboard in `ui/` reads the same SQLite db (its
-writes are the Hide button, which stamps `listings.hidden_at`, and the
-Products pages, which edit the `products` table):
+writes are the Hide button, which stamps `listings.hidden_at`, the
+Products pages, which edit the `products` table, and the scrape-now
+queue files described under Deployment):
 
 - **Deals** (`/`) — filterable best-deals table with KPI tiles and the
   product's verify-by-hand checklist, each listing with its photo. Car
@@ -224,10 +225,14 @@ Products pages, which edit the `products` table):
 - **Backtests** (`/backtests`) — every stored backtest, visualized:
   best price by lookback window, savings vs the 3-day baseline with
   95% CIs, and per-site win rates. Caveats are always shown.
-- **Products** (`/products`) — every product with its listing counts;
-  create, edit and delete products in a form (queries and manual
-  checks one per line, criteria and extractors as JSON, sites as
-  checkboxes). Same data the `add_product` MCP tool writes.
+- **Products** (`/products`) — every product with its listing counts.
+  **New product** needs only a name: the slug and the search query are
+  generated from it, the first scrape is queued immediately, and
+  everything else (sites, criteria, extractors, manual checks) waits
+  under *Advanced* on the product page for when you want it. Edit and
+  delete there too; **Scrape now** queues an immediate scrape of that
+  one product instead of waiting for the hourly run. Same data the
+  `add_product` MCP tool writes.
 - **Sites** (`/sites`) — which scrapers are actually working, with the
   strategy that ran and the last error.
 
@@ -260,6 +265,14 @@ What it sets up:
   the same browser image scraping every product (missed ticks fire on
   wake; `journalctl --user -u product-finder-scrape` shows the per-site
   summary; the run exits non-zero only when every site errored).
+- `product-finder-scrape-now.path` + `.container` — on-demand scrapes.
+  The dashboard's **Scrape now** button (and every newly created
+  product) drops an empty file `data/scrape-now/queue/<slug>`; the
+  path unit starts `product-finder-scrape --requested`, which moves it
+  to `running/<slug>` while it scrapes just that product and leaves a
+  one-line summary in `done/<slug>` when finished (the product page
+  shows all three states). `touch data/scrape-now/queue/<slug>` does
+  the same from a shell.
 - `product-finder-tunnel.service` — cloudflared serving
   https://product-finder.judicialschedule.com (config in
   `~/.cloudflared/product-finder.yml`; the installer writes it and the

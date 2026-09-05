@@ -6,6 +6,10 @@ export const moneyCents = (v: number | null | undefined): string =>
 export const pct = (v: number | null | undefined, digits = 0): string =>
   v == null ? "—" : `${(v * 100).toFixed(digits)}%`;
 export const day = (iso: string): string => iso.slice(0, 10);
+/** "14:32" — local HH:MM (24h) from an ISO timestamp, for the
+ * scrape-now status line. */
+export const hhmm = (iso: string): string =>
+  new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 export const windowLabel = (days: number): string =>
   days % 7 === 0 ? `${days / 7}w` : `${days}d`;
 /** "$0.147/oz" — pack-size price from units.py; sub-dollar values keep 3
