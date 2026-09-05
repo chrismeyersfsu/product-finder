@@ -109,13 +109,16 @@ fi
 echo "route: $TUNNEL_HOST -> tunnel $TUNNEL_ID"
 
 echo "== installing units =="
-# Ad-hoc dev processes from before the quadlet era hold :4321; the
-# script never kills anything itself — it asks and stops instead.
-if pgrep -f 'node dist/server/entry.mjs' >/dev/null 2>&1; then
-    echo "a dev UI server is holding :4321 — stop it first:"
-    echo "    pkill -f 'node dist/server/entry.mjs'"
-    exit 1
-fi
+# An ad-hoc dev server on :4321 would shadow the UI container (whose
+# own node process also shows up here, with cwd /app — that one is
+# fine). The script never kills anything itself — it asks and stops.
+for pid in $(ss -ltnpH 'sport = :4321' 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2); do
+    if [ "$(readlink "/proc/$pid/cwd" 2>/dev/null)" != "/app" ]; then
+        echo "a dev UI server (pid $pid) is holding :4321 — stop it first:"
+        echo "    kill $pid"
+        exit 1
+    fi
+done
 # Stale host-process units would shadow the quadlet generator.
 rm -f "$UNIT_DIR"/product-finder-ui.service "$UNIT_DIR"/product-finder-mcp.service
 cp ./*.container "$QUADLET_DIR/"
