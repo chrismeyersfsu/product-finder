@@ -19,6 +19,8 @@
   has a direct image for every item; existing B&H rows pick up their
   image on the next scrape. B&H also gets a headless-browser fallback:
   it had been refusing about four plain-HTTP searches in five.
+- Sort is its own row on the results page, always visible, instead of
+  hidden inside Filters.
 
 ## 0.22.1 — 2026-09-05
 
