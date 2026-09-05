@@ -30,6 +30,8 @@
   "Pinned" bucket at the top of the results page, ahead of the "All"
   bucket, in the same sort order. Falls back to no pinning (no
   button, no buckets) on a db from before the `pinned_at` column.
+  Pinned listings always make it onto the page, even when they'd fall
+  outside the 100-row cap by score.
 - **Hidden** (`/hidden`) now always covers every product by default
   (a Product filter narrows it), restyled as the same listview as
   Results, with the product name on each row.

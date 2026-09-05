@@ -152,19 +152,19 @@ export function hasDb(): boolean {
 }
 
 /** Whether this db has been migrated with the listings.pinned_at
- *  column yet. Checked once per process (PRAGMA table_info is cheap,
- *  but the schema doesn't change while the server is running) and
- *  cached; deals() and the results page use this to fall back to "no
- *  pins" — an empty pinned bucket, no Pin button — on an older db
- *  instead of offering a control that would always fail. */
-let pinnedColumnChecked = false;
+ *  column yet. A positive answer is cached for the process (columns
+ *  don't disappear); a negative one is re-probed on every call, because
+ *  the migration runs in the MCP/scrape container and may land after
+ *  this server first looked (PRAGMA table_info is cheap). deals() and
+ *  the results page use this to fall back to "no pins" — an empty
+ *  pinned bucket, no Pin button — on an older db instead of offering a
+ *  control that would always fail. */
 let pinnedColumnPresent = false;
 export function pinningAvailable(): boolean {
-  if (!pinnedColumnChecked) {
+  if (!pinnedColumnPresent) {
     pinnedColumnPresent = withDb(false, (db) =>
       (db.prepare("PRAGMA table_info(listings)").all() as { name: string }[]).some((c) => c.name === "pinned_at")
     );
-    pinnedColumnChecked = true;
   }
   return pinnedColumnPresent;
 }
@@ -238,7 +238,12 @@ export function deals(productSlug: string, f: DealFilters = {}): Listing[] {
     }
     if (!f.includeHardFails) sql += " AND hard_fails = '[]'";
     if (f.maxDistance != null) { sql += " AND distance_mi IS NOT NULL AND distance_mi <= ?"; args.push(f.maxDistance); }
-    sql += " ORDER BY score DESC NULLS LAST, price ASC NULLS LAST LIMIT ?";
+    // Pinned rows sort first so they always survive the LIMIT — a pin on
+    // a low-scoring listing would otherwise vanish from the page entirely
+    // once a product has more than `limit` qualifying rows. The page
+    // re-sorts within each bucket, so this only decides who gets in.
+    const pinnedFirst = pinningAvailable() ? "(pinned_at IS NOT NULL) DESC, " : "";
+    sql += ` ORDER BY ${pinnedFirst}score DESC NULLS LAST, price ASC NULLS LAST LIMIT ?`;
     args.push(f.limit ?? 100);
     return db.prepare(sql).all(...args);
   });
