@@ -293,11 +293,12 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> int:
 def mark_unseen_gone(
     conn: sqlite3.Connection, product_slug: str, site_slug: str, before: str
 ) -> int:
-    """Flag a site's rows a scrape that started at `before` did not
-    refresh as status="gone" (sold, removed, or pushed off the results
-    we fetch — the site can't tell us which). Only rows with no status
-    yet: "sold"/"pending" say more than "gone", and a hidden row is
-    left alone since nobody is looking at it. Returns rows flagged."""
+    """Flag a site's rows no scrape has refreshed since `before` as
+    status="gone" (sold, removed, or pushed off the results we fetch —
+    the site can't tell us which; the caller picks `before` far enough
+    back to ride out result churn). Only rows with no status yet:
+    "sold"/"pending" say more than "gone", and a hidden row is left
+    alone since nobody is looking at it. Returns rows flagged."""
     cur = conn.execute(
         """UPDATE listings SET status='gone'
            WHERE product_slug=? AND site_slug=? AND last_seen < ?

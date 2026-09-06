@@ -40,13 +40,16 @@
   NULL rather than claiming to be live.
 - Listings that drop out of search are marked **gone**. Facebook's
   search feed never returns sold or pending listings — they just stop
-  appearing — so after every full scrape, any row a site's clean,
-  non-empty scrape didn't return gets a "gone · last seen <day>" badge
-  and sinks below live rows (above sold). It means sold, removed, or
-  pushed off the page we fetch — the site can't tell us which — and
-  the row reads live again the moment a scrape finds it. Applies to
-  every site, not just Facebook; a one-off `query=` run never marks
-  anything. `run_search` reports the count per site under `gone`.
+  appearing — so after every full scrape, any row of a site that
+  scraped clean and non-empty, and that no scrape has seen for a day,
+  gets a "gone · last seen <day>" badge and sinks below live rows
+  (above sold). The day's grace is for result churn: Facebook and
+  Newegg hand back a different top ~25 on every fetch, so one miss
+  means nothing. Gone means sold, removed, or pushed off the page we
+  fetch — the site can't tell us which — and the row reads live again
+  the moment a scrape finds it. Applies to every site, not just
+  Facebook; a one-off `query=` run never marks anything. `run_search`
+  reports the count per site under `gone`.
 
 ## 0.22.1 — 2026-09-05
 

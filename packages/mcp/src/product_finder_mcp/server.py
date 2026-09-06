@@ -192,14 +192,20 @@ def backfill_unit_prices() -> dict:
     return {"listings": n, "with_unit_price": priced}
 
 
+# How long a listing may go unseen before a clean scrape of its site
+# marks it gone; hourly scrapes make this ~24 consecutive misses.
+GONE_AFTER = timedelta(hours=24)
+
+
 def run_search(product_slug: str, sites: list[str] | None = None, query: str | None = None) -> dict:
     """Search enabled sites for a product's queries; score and store results.
 
     sites: optional list of site slugs to restrict to; defaults to the
     product's own site list, then every enabled site. query: optional
     one-off query overriding the product's stored queries. A full run
-    (no query=) also marks rows a clean, non-empty scrape of their site
-    no longer returned as status="gone" (summary["gone"] counts them).
+    (no query=) also marks rows no scrape of their site has returned for
+    GONE_AFTER, when this one ran clean and non-empty, as status="gone"
+    (summary["gone"] counts them).
     """
     conn = _connect()
     product = storage.get_product(conn, product_slug)
@@ -241,17 +247,22 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
             },
         )
         counts[li["site_slug"]] = counts.get(li["site_slug"], 0) + 1
-    # A site's rows this run didn't refresh are gone from its search
-    # (sold, removed, or off the page we fetch) — but only when every
-    # one of the product's queries ran clean on that site and found
-    # something: a one-off query= covers a different set of rows, and a
-    # site that answered empty is more likely a silent failure than an
-    # empty market. A row that comes back reads live again on upsert.
+    # A site's rows no scrape has refreshed for GONE_AFTER are gone from
+    # its search (sold, removed, or off the page we fetch) — but only
+    # when every one of the product's queries ran clean on that site
+    # this run and found something: a one-off query= covers a different
+    # set of rows, and a site that answered empty is more likely a
+    # silent failure than an empty market. The grace period is for
+    # page-1 churn: Facebook and Newegg return a different top ~25 per
+    # fetch, so a single miss says nothing (18 of the rows a first cut
+    # marked gone had been seen within six hours). A row that comes back
+    # reads live again on upsert.
     gone: dict[str, int] = {}
     if not query:
+        cutoff = (datetime.fromisoformat(started_at) - GONE_AFTER).isoformat(timespec="seconds")
         for slug in result["complete"]:
             if counts.get(slug):
-                gone[slug] = storage.mark_unseen_gone(conn, product_slug, slug, started_at)
+                gone[slug] = storage.mark_unseen_gone(conn, product_slug, slug, cutoff)
     summary = {
         "stored": len(result["listings"]) - rejected,
         "rejected_non_product": rejected,
