@@ -197,7 +197,9 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
 
     sites: optional list of site slugs to restrict to; defaults to the
     product's own site list, then every enabled site. query: optional
-    one-off query overriding the product's stored queries.
+    one-off query overriding the product's stored queries. A full run
+    (no query=) also marks rows a clean, non-empty scrape of their site
+    no longer returned as status="gone" (summary["gone"] counts them).
     """
     conn = _connect()
     product = storage.get_product(conn, product_slug)
@@ -212,6 +214,7 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
     if not queries:
         return {"error": "product has no queries; pass query= or update the product"}
 
+    started_at = storage._now()
     result = run_mod.search_many(site_rows, queries)
     home = _home(conn)
     cache = geo.GeoCache(conn) if home else None
@@ -238,10 +241,22 @@ def run_search(product_slug: str, sites: list[str] | None = None, query: str | N
             },
         )
         counts[li["site_slug"]] = counts.get(li["site_slug"], 0) + 1
+    # A site's rows this run didn't refresh are gone from its search
+    # (sold, removed, or off the page we fetch) — but only when every
+    # one of the product's queries ran clean on that site and found
+    # something: a one-off query= covers a different set of rows, and a
+    # site that answered empty is more likely a silent failure than an
+    # empty market. A row that comes back reads live again on upsert.
+    gone: dict[str, int] = {}
+    if not query:
+        for slug in result["complete"]:
+            if counts.get(slug):
+                gone[slug] = storage.mark_unseen_gone(conn, product_slug, slug, started_at)
     summary = {
         "stored": len(result["listings"]) - rejected,
         "rejected_non_product": rejected,
         "per_site": counts,
+        "gone": {k: v for k, v in gone.items() if v},
         "strategies": result["strategies"],
         "seconds": result.get("seconds", {}),
         "errors": result["errors"],

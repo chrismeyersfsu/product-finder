@@ -70,10 +70,12 @@ export interface Listing {
    *  own bucket. Always null on a db that predates the pinned_at
    *  column — see pinningAvailable(). */
   pinned_at: string | null;
-  /** Facebook Marketplace marks a listing sold or pending; every other
-   *  site always leaves this null. Absent entirely on a db that
-   *  predates the status column. */
-  status: "sold" | "pending" | null;
+  /** "sold"/"pending" come from Facebook Marketplace's own listing
+   *  state (every other site leaves them null); "gone" is set by the
+   *  scraper on any site's row a clean scrape no longer returned —
+   *  sold, removed, or off the page we fetch. Absent entirely on a db
+   *  that predates the status column. */
+  status: "sold" | "pending" | "gone" | null;
   image_url: string | null;
   est_value: number | null;
   median_price?: number;
@@ -262,10 +264,10 @@ export function deals(productSlug: string, f: DealFilters = {}): Listing[] {
     // once a product has more than `limit` qualifying rows. The page
     // re-sorts within each bucket, so this only decides who gets in.
     const pinnedFirst = pinningAvailable() ? "(pinned_at IS NOT NULL) DESC, " : "";
-    // A sold listing is no longer a deal, but the user still wants to see
-    // that it sold rather than have it vanish, so it sinks to the bottom
-    // of the candidates instead of being filtered out.
-    const soldLast = statusAvailable() ? "(status = 'sold') ASC, " : "";
+    // A sold or gone listing is no longer a deal, but the user still wants
+    // to see that it went rather than have it vanish, so it sinks to the
+    // bottom of the candidates instead of being filtered out.
+    const soldLast = statusAvailable() ? "(status IN ('sold', 'gone')) ASC, " : "";
     sql += ` ORDER BY ${pinnedFirst}${soldLast}score DESC NULLS LAST, price ASC NULLS LAST LIMIT ?`;
     args.push(f.limit ?? 100);
     return db.prepare(sql).all(...args);

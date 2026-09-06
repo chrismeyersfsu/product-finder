@@ -200,6 +200,26 @@ def test_listing_status_follows_latest_scrape(tmp_path):
     assert storage.query_listings(conn, "w")[0]["status"] is None
 
 
+def test_mark_unseen_gone_flags_only_stale_unflagged_rows(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_product(conn, {"slug": "w"})
+    base = {"product_slug": "w", "site_slug": "fb", "score": 0.5}
+    stale = storage.upsert_listing(conn, {**base, "url": "http://x/stale"})
+    sold = storage.upsert_listing(conn, {**base, "url": "http://x/sold", "status": "sold"})
+    hidden = storage.upsert_listing(conn, {**base, "url": "http://x/hidden"})
+    storage.set_listing_hidden(conn, hidden, True)
+    other_site = storage.upsert_listing(conn, {**base, "site_slug": "ebay", "url": "http://y/1"})
+    conn.execute("UPDATE listings SET last_seen='2000-01-01T00:00:00+00:00'")
+    fresh = storage.upsert_listing(conn, {**base, "url": "http://x/fresh"})
+    assert storage.mark_unseen_gone(conn, "w", "fb", storage._now()) == 1
+    by_id = {r["id"]: r["status"] for r in storage.query_listings(conn, "w", include_hidden=True)}
+    assert by_id[stale] == "gone"
+    assert by_id[sold] == "sold" and by_id[hidden] is None
+    assert by_id[other_site] is None and by_id[fresh] is None
+    storage.upsert_listing(conn, {**base, "url": "http://x/stale"})  # reappears: live again
+    assert {r["status"] for r in storage.query_listings(conn, "w") if r["id"] == stale} == {None}
+
+
 def test_pinned_listing_still_hidden_when_hidden(tmp_path):
     conn = _conn(tmp_path)
     storage.upsert_product(conn, {"slug": "w"})

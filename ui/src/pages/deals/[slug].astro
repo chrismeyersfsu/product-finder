@@ -21,11 +21,13 @@
  * default) so Apply never drops a non-default sort. `sort` only
  * reorders the array in memory here — it never touches db.deals's own
  * query or its default order (score desc, price asc); status (live/
- * pending/sold) is always the primary sort key ahead of whatever `sort`
- * picks, so a sold or pending row never outranks a live one. A Facebook
- * Marketplace listing marked sold or pending shows a "sold"/"pending"
- * badge next to its title, always on (not a Fields toggle), and a sold
- * listing's price renders with a strikethrough. A second "Fields"
+ * pending/gone/sold) is always the primary sort key ahead of whatever
+ * `sort` picks, so a row that's no longer live never outranks one that
+ * is. A Facebook Marketplace listing marked sold or pending shows a
+ * "sold"/"pending" badge next to its title, a row the scraper stopped
+ * seeing shows "gone" with the day it was last seen — always on (not a
+ * Fields toggle) — and a sold listing's price renders with a
+ * strikethrough. A second "Fields"
  * collapsible lets the viewer toggle which attributes show on each
  * row at all (a global preference, one `listing_fields` row in the
  * `settings` table via lib/settings.ts, applied to every product); its
@@ -112,9 +114,11 @@ const rows = product ? [...db.deals(slug, filters)] : [];
 // Display-only re-sort; db.deals's own query and default order are
 // untouched (default here just keeps that order: score desc, price asc).
 // Status is always the primary key, regardless of the chosen sort: live
-// rows first, then pending, then sold, so a sold/pending listing never
-// outranks a live one just because it scores or prices better.
-const statusRank = (r: db.Listing) => (r.status === "pending" ? 1 : r.status === "sold" ? 2 : 0);
+// rows first, then pending, then gone, then sold, so a listing that's no
+// longer live never outranks one that is just because it scores or
+// prices better.
+const statusRank = (r: db.Listing) =>
+  r.status === "pending" ? 1 : r.status === "gone" ? 2 : r.status === "sold" ? 3 : 0;
 const sortCmp: (a: db.Listing, b: db.Listing) => number =
   sort === "price_asc" ? (a, b) => (a.price ?? Infinity) - (b.price ?? Infinity)
   : sort === "price_desc" ? (a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity)
@@ -255,6 +259,7 @@ const on = (key: string) => enabledFields.has(key);
                     {on("new_badge") && isNew(r) && <span class="badge badge-new" title={`First seen ${r.first_seen.slice(0, 16).replace("T", " ")} UTC`}>new</span>}
                     {r.status === "sold" && <span class="badge badge-sold">sold</span>}
                     {r.status === "pending" && <span class="badge badge-pending">pending</span>}
+                    {r.status === "gone" && <span class="badge badge-gone">gone · last seen {day(r.last_seen)}</span>}
                     <div class="ui-li-price-row">
                       {on("price") && <span class:list={["ui-li-price", { "ui-li-price-sold": r.status === "sold" }]}>{moneyCents(r.price)}</span>}
                       {on("vs_est") && r.pct_vs_est != null && (

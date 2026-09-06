@@ -116,6 +116,7 @@ def test_search_many_dedupes_and_reports_strategies(monkeypatch):
     assert out["errors"] == {}
     assert out["strategies"] == {"ebay": "browser_css"}
     assert set(out["seconds"]) == {"ebay"} and out["seconds"]["ebay"] >= 0
+    assert out["complete"] == ["ebay"]
 
 
 def test_facebook_login_wall_error_is_clear(monkeypatch):
@@ -238,6 +239,7 @@ def test_search_many_keeps_error_only_without_any_success(monkeypatch):
     out = run.search_many([site], ["q1", "q2"])
     assert out["errors"] == {}  # q2 succeeded; q1's 403 is not reported
     assert out["strategies"] == {"newegg2": "css"}
+    assert out["complete"] == []  # ...but the site is not complete either
 
 
 def test_kroger_creds_unset_falls_through_to_css(monkeypatch):

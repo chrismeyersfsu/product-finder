@@ -67,6 +67,48 @@ def test_run_search_scores_and_stores(monkeypatch):
     assert deals["manual_checks"]
 
 
+def test_run_search_marks_rows_a_clean_scrape_no_longer_returns_gone(monkeypatch):
+    server.seed_defaults()
+    monkeypatch.setattr(
+        fetch,
+        "_get_browser",
+        lambda url, wait=None, timeout=30.0, cookies=None: (FIXTURES / "ebay.html").read_text(),
+    )
+    conn = server._connect()
+    stale = storage.upsert_listing(
+        conn,
+        {
+            "product_slug": "thin-client-laptop",
+            "site_slug": "ebay",
+            "url": "http://e/old",
+            "score": 1,
+        },
+    )
+    elsewhere = storage.upsert_listing(
+        conn,
+        {
+            "product_slug": "thin-client-laptop",
+            "site_slug": "amazon",
+            "url": "http://a/1",
+            "score": 1,
+        },
+    )
+    conn.execute("UPDATE listings SET last_seen='2000-01-01T00:00:00+00:00'")
+    conn.commit()
+    # A one-off query covers a different set of rows: nothing is marked.
+    summary = server.run_search("thin-client-laptop", sites=["ebay"], query="x1 carbon")
+    assert summary["gone"] == {}
+    status = {r["id"]: r["status"] for r in server.query_listings("thin-client-laptop", limit=100)}
+    assert status[stale] is None
+    # A full run over the product's queries marks ebay's stale row, and
+    # leaves the site it didn't search alone.
+    summary = server.run_search("thin-client-laptop", sites=["ebay"])
+    assert summary["gone"] == {"ebay": 1}
+    status = {r["id"]: r["status"] for r in server.query_listings("thin-client-laptop", limit=100)}
+    assert status[stale] == "gone" and status[elsewhere] is None
+    assert all(v is None for k, v in status.items() if k not in (stale, elsewhere))
+
+
 def test_run_search_records_site_errors(monkeypatch):
     server.seed_defaults()
 

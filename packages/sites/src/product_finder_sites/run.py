@@ -134,16 +134,23 @@ def search_site(site: dict, query: str) -> dict:
 def search_many(sites: list[dict], queries: list[str]) -> dict:
     """Run every query against every site. Returns {"listings": [...],
     "errors": {site: msg}, "strategies": {site: kind_that_ran},
-    "seconds": {site: wall_clock}} with url-deduped listings."""
+    "seconds": {site: wall_clock}, "complete": [site, ...]} with
+    url-deduped listings. `complete` lists the sites where *every*
+    query succeeded — the only sites whose current results can be
+    read as "anything not in here is gone from search"; `errors`
+    can't say that, since one good query clears a bad one's error."""
     seen: dict[str, dict] = {}
     errors: dict[str, str] = {}
     strategies: dict[str, str] = {}
     seconds: dict[str, float] = {}
+    complete: list[str] = []
     for site in sites:
         started = time.monotonic()
+        failed = False
         for query in queries:
             result = search_site(site, query)
             if result["error"]:
+                failed = True
                 if site["slug"] not in strategies:  # never overwrite a success
                     errors[site["slug"]] = result["error"]
                 continue
@@ -151,10 +158,13 @@ def search_many(sites: list[dict], queries: list[str]) -> dict:
             errors.pop(site["slug"], None)
             for li in result["listings"]:
                 seen.setdefault(li["url"], li)
+        if not failed:
+            complete.append(site["slug"])
         seconds[site["slug"]] = round(time.monotonic() - started, 1)
     return {
         "listings": list(seen.values()),
         "errors": errors,
         "strategies": strategies,
         "seconds": seconds,
+        "complete": complete,
     }

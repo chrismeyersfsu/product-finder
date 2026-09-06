@@ -9,9 +9,12 @@ re-running a search refreshes price/last_seen instead of duplicating —
 first_seen, hidden_at, and pinned_at survive that refresh, so "new
 since", hide-from-deals state, and pin-to-top state persist across
 scrapes, and a scrape that finds no image keeps the image_url an
-earlier one stored. status ("sold" / "pending" / NULL for live) is
+earlier one stored. status ("sold" / "pending" / "gone" / NULL) is
 whatever the latest scrape reported — a listing marked sold on one
-scrape and live on the next reads live again. query_listings() omits hidden rows unless asked
+scrape and live on the next reads live again; "gone" is never parsed
+from a site, it is what mark_unseen_gone() writes on rows a complete
+scrape of their site no longer returned, and a row that reappears
+reads live again the same way. query_listings() omits hidden rows unless asked
 for them (a pinned row is still hidden if hidden_at is set). est_value
 (the fitted market value, scoring.py's math) is written only by
 set_est_values(), which callers run over a whole product after a
@@ -285,6 +288,24 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> int:
     )
     conn.commit()
     return cur.lastrowid
+
+
+def mark_unseen_gone(
+    conn: sqlite3.Connection, product_slug: str, site_slug: str, before: str
+) -> int:
+    """Flag a site's rows a scrape that started at `before` did not
+    refresh as status="gone" (sold, removed, or pushed off the results
+    we fetch — the site can't tell us which). Only rows with no status
+    yet: "sold"/"pending" say more than "gone", and a hidden row is
+    left alone since nobody is looking at it. Returns rows flagged."""
+    cur = conn.execute(
+        """UPDATE listings SET status='gone'
+           WHERE product_slug=? AND site_slug=? AND last_seen < ?
+             AND status IS NULL AND hidden_at IS NULL""",
+        (product_slug, site_slug, before),
+    )
+    conn.commit()
+    return cur.rowcount
 
 
 def set_listing_distance(conn: sqlite3.Connection, listing_id: int, distance_mi: float | None):
