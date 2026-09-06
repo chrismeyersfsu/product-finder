@@ -111,9 +111,14 @@ def test_parse_facebook_marketplace():
     assert (
         first["image_url"] == "https://scontent.xx.fbcdn.net/v/t45.5328-4/thinkpad_x1_carbon_g6.jpg"
     )
+    assert first["status"] is None
     assert items[1]["price"] == 1200.0
     assert items[1]["image_url"] is None  # card has no <img>
+    assert items[1]["status"] == "sold"  # the ribbon span is not the title
+    assert items[1]["title"] == "ThinkPad X1 Carbon Gen 9 like new"
     assert items[2]["price"] is None  # no-price card still parses
+    assert items[2]["status"] == "pending"
+    assert items[2]["title"] == "Laptop dock, no price listed"
 
 
 def test_facebook_login_wall_raises():

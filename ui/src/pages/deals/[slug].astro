@@ -20,7 +20,12 @@
  * sort along the same way (a hidden input, added when sort isn't the
  * default) so Apply never drops a non-default sort. `sort` only
  * reorders the array in memory here — it never touches db.deals's own
- * query or its default order (score desc, price asc). A second "Fields"
+ * query or its default order (score desc, price asc); status (live/
+ * pending/sold) is always the primary sort key ahead of whatever `sort`
+ * picks, so a sold or pending row never outranks a live one. A Facebook
+ * Marketplace listing marked sold or pending shows a "sold"/"pending"
+ * badge next to its title, always on (not a Fields toggle), and a sold
+ * listing's price renders with a strikethrough. A second "Fields"
  * collapsible lets the viewer toggle which attributes show on each
  * row at all (a global preference, one `listing_fields` row in the
  * `settings` table via lib/settings.ts, applied to every product); its
@@ -106,10 +111,17 @@ const filters: db.DealFilters = {
 const rows = product ? [...db.deals(slug, filters)] : [];
 // Display-only re-sort; db.deals's own query and default order are
 // untouched (default here just keeps that order: score desc, price asc).
-if (sort === "price_asc") rows.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
-else if (sort === "price_desc") rows.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
-else if (sort === "newest") rows.sort((a, b) => b.first_seen.localeCompare(a.first_seen));
-else if (sort === "distance") rows.sort((a, b) => (a.distance_mi ?? Infinity) - (b.distance_mi ?? Infinity));
+// Status is always the primary key, regardless of the chosen sort: live
+// rows first, then pending, then sold, so a sold/pending listing never
+// outranks a live one just because it scores or prices better.
+const statusRank = (r: db.Listing) => (r.status === "pending" ? 1 : r.status === "sold" ? 2 : 0);
+const sortCmp: (a: db.Listing, b: db.Listing) => number =
+  sort === "price_asc" ? (a, b) => (a.price ?? Infinity) - (b.price ?? Infinity)
+  : sort === "price_desc" ? (a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity)
+  : sort === "newest" ? (a, b) => b.first_seen.localeCompare(a.first_seen)
+  : sort === "distance" ? (a, b) => (a.distance_mi ?? Infinity) - (b.distance_mi ?? Infinity)
+  : () => 0; // score/default: Array.sort is stable, so db.deals's own order is preserved
+rows.sort((a, b) => statusRank(a) - statusRank(b) || sortCmp(a, b));
 const sites = product ? db.listingSites(slug) : [];
 const knownSites = db.listSites().map((s) => s.slug);
 const back = url.pathname + url.search;
@@ -241,8 +253,10 @@ const on = (key: string) => enabledFields.has(key);
                   <div class="ui-li-body">
                     <a class="ui-li-title" href={r.url} rel="noopener noreferrer" target="_blank">{r.title || r.url}</a>
                     {on("new_badge") && isNew(r) && <span class="badge badge-new" title={`First seen ${r.first_seen.slice(0, 16).replace("T", " ")} UTC`}>new</span>}
+                    {r.status === "sold" && <span class="badge badge-sold">sold</span>}
+                    {r.status === "pending" && <span class="badge badge-pending">pending</span>}
                     <div class="ui-li-price-row">
-                      {on("price") && <span class="ui-li-price">{moneyCents(r.price)}</span>}
+                      {on("price") && <span class:list={["ui-li-price", { "ui-li-price-sold": r.status === "sold" }]}>{moneyCents(r.price)}</span>}
                       {on("vs_est") && r.pct_vs_est != null && (
                         <span class={r.pct_vs_est <= 0 ? "ui-li-vs-good" : "ui-li-vs-bad"}>{r.pct_vs_est > 0 ? "+" : ""}{r.pct_vs_est}% vs est.</span>
                       )}

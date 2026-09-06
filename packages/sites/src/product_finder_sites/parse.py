@@ -68,6 +68,12 @@ url, location, seller_rating/seller_feedback_count always None,
 image_url) since the storage contract is unchanged; location is
 "City, ST" from the node's reverse_geocode, or just the city, or None.
 
+Both Facebook parsers also carry "status": "sold" or "pending" when
+Marketplace marks the listing so (the node's is_sold / is_pending
+booleans; the "Sold" / "Pending" ribbon span on a DOM card), else None.
+No other parser sets status, so storage's status column is NULL for
+every site that can't tell — callers must not read NULL as "live".
+
 Dealer used-car rows (autolist_api, carscom, carvana) are titled
 "[Used] YEAR Make Model Trim, <odometer> mi" so the car products'
 year/mileage extractors read them like a Craigslist title; condition
@@ -394,7 +400,9 @@ def _parse_facebook(page_url: str, body: str) -> list[dict]:
             if not s.find("span") and s.get_text(strip=True)
         ]
         price_text = next((t for t in texts if _PRICE_RE.search(t)), None)
-        rest = [t for t in texts if t != price_text]
+        # The "Sold" / "Pending" ribbon over the photo is its own leaf span.
+        badges = {t.lower() for t in texts if t.lower() in ("sold", "pending")}
+        rest = [t for t in texts if t != price_text and t.lower() not in badges]
         location = next((t for t in rest if _LOCATION_RE.match(t)), None)
         title = max((t for t in rest if t != location), key=len, default="")
         if not title:
@@ -410,6 +418,7 @@ def _parse_facebook(page_url: str, body: str) -> list[dict]:
                 "seller_rating": None,
                 "seller_feedback_count": None,
                 "image_url": urljoin(page_url, image_url) if image_url else None,
+                "status": _fb_status("sold" in badges, "pending" in badges),
             }
         )
     return out
@@ -516,7 +525,19 @@ def _parse_facebook_json_listing(listing: dict) -> dict:
         "seller_rating": None,
         "seller_feedback_count": None,
         "image_url": image_url,
+        "status": _fb_status(listing.get("is_sold"), listing.get("is_pending")),
     }
+
+
+def _fb_status(sold, pending) -> str | None:
+    """Marketplace's sold / pending state as the listing's status: "sold"
+    beats "pending", and a live listing is None (not "live") so every
+    other site's rows, which never set status, read the same."""
+    if sold:
+        return "sold"
+    if pending:
+        return "pending"
+    return None
 
 
 def _parse_facebook_json_edges(edges: list) -> list[dict]:

@@ -70,6 +70,10 @@ export interface Listing {
    *  own bucket. Always null on a db that predates the pinned_at
    *  column — see pinningAvailable(). */
   pinned_at: string | null;
+  /** Facebook Marketplace marks a listing sold or pending; every other
+   *  site always leaves this null. Absent entirely on a db that
+   *  predates the status column. */
+  status: "sold" | "pending" | null;
   image_url: string | null;
   est_value: number | null;
   median_price?: number;
@@ -169,6 +173,21 @@ export function pinningAvailable(): boolean {
   return pinnedColumnPresent;
 }
 
+/** Whether this db has been migrated with the listings.status column
+ *  yet. Same caching rule as pinningAvailable(): a positive answer is
+ *  cached for the process, a negative one is re-probed every call.
+ *  deals() uses this to skip the sold-sinks ORDER BY term on an older
+ *  db instead of throwing on the missing column. */
+let statusColumnPresent = false;
+export function statusAvailable(): boolean {
+  if (!statusColumnPresent) {
+    statusColumnPresent = withDb(false, (db) =>
+      (db.prepare("PRAGMA table_info(listings)").all() as { name: string }[]).some((c) => c.name === "status")
+    );
+  }
+  return statusColumnPresent;
+}
+
 export function listProducts(): Product[] {
   return withDb([] as Product[], (db) =>
     db
@@ -243,7 +262,11 @@ export function deals(productSlug: string, f: DealFilters = {}): Listing[] {
     // once a product has more than `limit` qualifying rows. The page
     // re-sorts within each bucket, so this only decides who gets in.
     const pinnedFirst = pinningAvailable() ? "(pinned_at IS NOT NULL) DESC, " : "";
-    sql += ` ORDER BY ${pinnedFirst}score DESC NULLS LAST, price ASC NULLS LAST LIMIT ?`;
+    // A sold listing is no longer a deal, but the user still wants to see
+    // that it sold rather than have it vanish, so it sinks to the bottom
+    // of the candidates instead of being filtered out.
+    const soldLast = statusAvailable() ? "(status = 'sold') ASC, " : "";
+    sql += ` ORDER BY ${pinnedFirst}${soldLast}score DESC NULLS LAST, price ASC NULLS LAST LIMIT ?`;
     args.push(f.limit ?? 100);
     return db.prepare(sql).all(...args);
   });
@@ -252,6 +275,7 @@ export function deals(productSlug: string, f: DealFilters = {}): Listing[] {
     hard_fails: JSON.parse(r.hard_fails),
     flags: JSON.parse(r.flags ?? "[]"),
     pinned_at: r.pinned_at ?? null, // absent entirely on a pre-migration db
+    status: r.status ?? null, // absent entirely on a pre-migration db
   }));
   const prices = listings.map((l) => l.price).filter((p): p is number => p != null && p > 0);
   if (prices.length) {
@@ -283,6 +307,7 @@ export function hiddenListings(productSlug?: string): HiddenListing[] {
       ...r,
       hard_fails: JSON.parse(r.hard_fails),
       flags: JSON.parse(r.flags ?? "[]"),
+      status: r.status ?? null,
     }));
   });
 }

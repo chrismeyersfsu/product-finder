@@ -30,6 +30,14 @@
   product has one to the product list.
 - Swipe a product left on the product list to reveal Edit and
   Delete (Delete asks for confirmation first).
+- Facebook Marketplace listings show whether they've sold: a **sold**
+  or **pending** badge next to the title (sold rows also get a
+  struck-through price), read from Marketplace's own listing state on
+  every scrape, so a listing that sells between scrapes flips to sold
+  at the next one. Sold rows sink to the bottom of the results instead
+  of disappearing. Stored as a new `status` column on listings (`sold`
+  / `pending` / NULL); other sites don't report it, so their rows stay
+  NULL rather than claiming to be live.
 
 ## 0.22.1 — 2026-09-05
 

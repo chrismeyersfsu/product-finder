@@ -71,10 +71,19 @@ def test_happy_path_document_embedded_feed(monkeypatch):
     )
     assert first["seller_rating"] is None
     assert first["seller_feedback_count"] is None
+    assert first["status"] is None  # is_sold / is_pending both false
     assert listings[1]["location"] == "Concord, NC"
     assert listings[1]["price"] == 1.0
+    assert listings[1]["status"] == "sold"
     assert listings[2]["title"] == "Bactine max liquid bandaid"
     assert listings[2]["price"] == 5.0
+    assert listings[2]["status"] == "pending"
+
+
+def test_status_sold_beats_pending_and_missing_flags_read_live():
+    assert parse._fb_status(True, True) == "sold"
+    assert parse._fb_status(None, None) is None
+    assert parse._fb_status(False, True) == "pending"
 
 
 def test_empty_document_returns_empty_list(monkeypatch):

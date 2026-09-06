@@ -115,6 +115,7 @@ def test_migrate_adds_distance_column_to_old_db(tmp_path):
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(listings)")}
     assert "distance_mi" in cols
     assert "pinned_at" in cols
+    assert "status" in cols
     assert "sites" in {r["name"] for r in conn.execute("PRAGMA table_info(products)")}
     storage.upsert_product(conn, {"slug": "w"})
     storage.upsert_listing(
@@ -185,6 +186,18 @@ def test_pinned_listings_survive_rescrape(tmp_path):
     assert storage.set_listing_pinned(conn, lid, False)
     assert storage.query_listings(conn, "w")[0]["pinned_at"] is None
     assert not storage.set_listing_pinned(conn, 999, True)
+
+
+def test_listing_status_follows_latest_scrape(tmp_path):
+    conn = _conn(tmp_path)
+    storage.upsert_product(conn, {"slug": "w"})
+    li = {"product_slug": "w", "site_slug": "fb", "url": "http://x/s", "score": 0.5}
+    storage.upsert_listing(conn, li)
+    assert storage.query_listings(conn, "w")[0]["status"] is None
+    storage.upsert_listing(conn, {**li, "status": "sold"})
+    assert storage.query_listings(conn, "w")[0]["status"] == "sold"
+    storage.upsert_listing(conn, li)  # relisted: the latest scrape wins
+    assert storage.query_listings(conn, "w")[0]["status"] is None
 
 
 def test_pinned_listing_still_hidden_when_hidden(tmp_path):

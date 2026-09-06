@@ -9,7 +9,9 @@ re-running a search refreshes price/last_seen instead of duplicating —
 first_seen, hidden_at, and pinned_at survive that refresh, so "new
 since", hide-from-deals state, and pin-to-top state persist across
 scrapes, and a scrape that finds no image keeps the image_url an
-earlier one stored. query_listings() omits hidden rows unless asked
+earlier one stored. status ("sold" / "pending" / NULL for live) is
+whatever the latest scrape reported — a listing marked sold on one
+scrape and live on the next reads live again. query_listings() omits hidden rows unless asked
 for them (a pinned row is still hidden if hidden_at is set). est_value
 (the fitted market value, scoring.py's math) is written only by
 set_est_values(), which callers run over a whole product after a
@@ -70,6 +72,7 @@ CREATE TABLE IF NOT EXISTS listings (
   image_url TEXT,
   est_value REAL,
   flags TEXT NOT NULL DEFAULT '[]',
+  status TEXT,
   UNIQUE(product_slug, url)
 );
 CREATE TABLE IF NOT EXISTS settings (
@@ -125,6 +128,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE listings ADD COLUMN flags TEXT NOT NULL DEFAULT '[]'")
     if "pinned_at" not in cols:
         conn.execute("ALTER TABLE listings ADD COLUMN pinned_at TEXT")
+    if "status" not in cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN status TEXT")
     conn.execute("DROP INDEX IF EXISTS idx_price_history_lookup")
     conn.execute("DROP TABLE IF EXISTS price_history")
     conn.execute("DROP TABLE IF EXISTS backtests")
@@ -254,17 +259,19 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> int:
         "unit": listing.get("unit"),
         "unit_price": listing.get("unit_price"),
         "image_url": listing.get("image_url"),
+        "status": listing.get("status"),
         "now": now,
     }
     cur = conn.execute(
         """INSERT INTO listings (product_slug, site_slug, url, title, price, currency,
                                  condition, location, seller_rating, seller_feedback_count,
                                  attrs, score, hard_fails, flags, distance_mi,
-                                 unit_qty, unit, unit_price, image_url, first_seen, last_seen)
+                                 unit_qty, unit, unit_price, image_url, status,
+                                 first_seen, last_seen)
            VALUES (:product_slug, :site_slug, :url, :title, :price, :currency,
                    :condition, :location, :seller_rating, :seller_feedback_count,
                    :attrs, :score, :hard_fails, :flags, :distance_mi,
-                   :unit_qty, :unit, :unit_price, :image_url, :now, :now)
+                   :unit_qty, :unit, :unit_price, :image_url, :status, :now, :now)
            ON CONFLICT(product_slug, url) DO UPDATE SET
              title=excluded.title, price=excluded.price, condition=excluded.condition,
              location=excluded.location, seller_rating=excluded.seller_rating,
@@ -273,7 +280,7 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> int:
              flags=excluded.flags, distance_mi=excluded.distance_mi, unit_qty=excluded.unit_qty,
              unit=excluded.unit, unit_price=excluded.unit_price,
              image_url=COALESCE(excluded.image_url, listings.image_url),
-             last_seen=excluded.last_seen""",
+             status=excluded.status, last_seen=excluded.last_seen""",
         row,
     )
     conn.commit()

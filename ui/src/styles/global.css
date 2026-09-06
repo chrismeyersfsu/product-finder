@@ -200,6 +200,7 @@ a.hdr-btn { color: var(--text-primary); }
 }
 .ui-li-price-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 14px; }
 .ui-li-price { font-weight: 700; font-size: 16px; }
+.ui-li-price-sold { text-decoration: line-through; color: var(--text-muted); }
 .ui-li-vs-good { color: var(--up-good); }
 .ui-li-vs-bad { color: var(--status-critical); }
 .ui-li-meta { font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
@@ -369,6 +370,8 @@ table.data[data-sortable] thead th:focus-visible { outline: 2px solid var(--acce
 .btn-ghost:disabled { opacity: 0.5; cursor: wait; }
 .hide-form, .pin-form { display: inline; margin: 0; }
 .badge-new { border-color: var(--accent); color: var(--accent); margin-left: 6px; vertical-align: 1px; }
+.badge-sold { border-color: var(--status-critical); color: var(--status-critical); margin-left: 6px; vertical-align: 1px; }
+.badge-pending { border-color: var(--status-warning-ink); color: var(--status-warning-ink); margin-left: 6px; vertical-align: 1px; }
 
 /* Icon-only ghost button (PinButton's pushpin) */
 .btn-icon { display: inline-flex; align-items: center; justify-content: center; padding: 8px; line-height: 0; }
